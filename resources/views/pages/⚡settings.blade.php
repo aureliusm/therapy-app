@@ -1,7 +1,9 @@
 <?php
 
+use App\Jobs\DownloadAppUpdate;
 use App\Models\Setting;
 use App\Services\AppUpdater;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -24,12 +26,21 @@ new #[Layout('layouts::app')] #[Title('Nastavitve')] class extends Component
 
     public bool $checkingUpdate = false;
 
+    public string $gemini_api_key = '';
+
+    public bool $hasGeminiApiKey = false;
+
+    /** @var array{state?: string, percent?: int, message?: ?string} */
+    public array $download = [];
+
     public function mount(AppUpdater $updater): void
     {
         $settings = Setting::current();
         $this->default_therapy_type = $settings->default_therapy_type;
         $this->base_prompt = (string) $settings->base_prompt;
+        $this->hasGeminiApiKey = filled(Setting::geminiApiKey());
         $this->currentVersion = $updater->currentVersion();
+        $this->refreshDownload();
     }
 
     public function save(): void
@@ -37,10 +48,33 @@ new #[Layout('layouts::app')] #[Title('Nastavitve')] class extends Component
         $validated = $this->validate([
             'default_therapy_type' => ['required', 'string', 'max:255'],
             'base_prompt' => ['required', 'string'],
+            'gemini_api_key' => ['nullable', 'string', 'max:255'],
         ]);
 
+        if (blank($validated['gemini_api_key'])) {
+            unset($validated['gemini_api_key']);
+        } else {
+            $validated['gemini_api_key'] = trim($validated['gemini_api_key']);
+        }
+
         Setting::current()->update($validated);
+        $this->gemini_api_key = '';
+        $this->hasGeminiApiKey = filled(Setting::geminiApiKey());
         session()->flash('status', 'Nastavitve so shranjene.');
+    }
+
+    public function isDownloading(): bool
+    {
+        return in_array($this->download['state'] ?? null, ['queued', 'downloading'], true);
+    }
+
+    public function refreshDownload(): void
+    {
+        $this->download = Cache::get(DownloadAppUpdate::CACHE_KEY, []);
+
+        if (filled($this->download['message'] ?? null)) {
+            $this->updateMessage = (string) $this->download['message'];
+        }
     }
 
     public function checkForUpdates(AppUpdater $updater): void
@@ -66,11 +100,14 @@ new #[Layout('layouts::app')] #[Title('Nastavitve')] class extends Component
             return;
         }
 
-        try {
-            $this->updateMessage = $updater->install($status['latest']);
-        } catch (\Throwable $e) {
-            $this->updateMessage = $e->getMessage();
+        if ($this->isDownloading()) {
+            return;
         }
+
+        DownloadAppUpdate::putState(['state' => 'queued']);
+        DownloadAppUpdate::dispatch($status['latest']);
+        $this->updateMessage = 'Prenašam različico '.$status['latest']['version'].' …';
+        $this->refreshDownload();
     }
 };
 ?>
@@ -105,9 +142,12 @@ new #[Layout('layouts::app')] #[Title('Nastavitve')] class extends Component
             @error('base_prompt') <p class="mt-1 text-sm text-brand-light">{{ $message }}</p> @enderror
         </div>
 
-        <div class="rounded-2xl bg-cream p-4 text-sm text-muted">
-            <p class="font-medium text-ink/80">Gemini</p>
-            <p class="mt-1">Ključ in modeli so v <code class="text-mauve-dark">.env</code> (<code>GEMINI_API_KEY</code>, <code>GEMINI_SUMMARY_MODEL</code>, <code>GEMINI_TRANSCRIBE_MODEL</code>).</p>
+        <div>
+            <label class="field-label" for="gemini_api_key">Gemini API ključ</label>
+            <input id="gemini_api_key" type="password" wire:model="gemini_api_key" class="field-input" autocomplete="off"
+                   placeholder="{{ $hasGeminiApiKey ? 'Ključ je nastavljen — vnesi novega, če ga želiš zamenjati' : 'Prilepi ključ iz Google AI Studio' }}">
+            <p class="mt-2 text-xs text-muted">Ključ se shrani šifriran samo na tem računalniku.</p>
+            @error('gemini_api_key') <p class="mt-1 text-sm text-brand-light">{{ $message }}</p> @enderror
         </div>
 
         <button type="submit" class="btn-primary">Shrani nastavitve</button>
@@ -119,6 +159,18 @@ new #[Layout('layouts::app')] #[Title('Nastavitve')] class extends Component
             <h3 class="mt-1 text-xl font-semibold tracking-tight text-ink">Posodobitve aplikacije</h3>
             <p class="mt-1 text-sm text-muted">Trenutna različica: <span class="font-medium text-ink">{{ $currentVersion }}</span></p>
         </div>
+
+        @if ($this->isDownloading())
+            <div wire:poll.1s="refreshDownload" class="space-y-2">
+                <div class="h-2 overflow-hidden rounded-full bg-cream">
+                    <div class="h-full rounded-full bg-brand transition-all" style="width: {{ $download['percent'] ?? 0 }}%"></div>
+                </div>
+                <p class="text-sm text-muted">
+                    {{ ($download['state'] ?? '') === 'queued' ? 'Čakam na začetek prenosa …' : 'Prenašam … '.($download['percent'] ?? 0).' %' }}
+                    Med prenosom lahko aplikacijo normalno uporabljaš.
+                </p>
+            </div>
+        @endif
 
         @if ($updateMessage)
             <div @class([
@@ -139,10 +191,10 @@ new #[Layout('layouts::app')] #[Title('Nastavitve')] class extends Component
                 <span wire:loading wire:target="checkForUpdates">Preverjam …</span>
             </button>
 
-            @if ($updateAvailable)
+            @if ($updateAvailable && ! $this->isDownloading())
                 <button type="button" class="btn-primary" wire:click="installUpdate" wire:loading.attr="disabled">
                     <span wire:loading.remove wire:target="installUpdate">Prenesi in namesti {{ $latestVersion }}</span>
-                    <span wire:loading wire:target="installUpdate">Prenašam …</span>
+                    <span wire:loading wire:target="installUpdate">Začenjam …</span>
                 </button>
             @endif
         </div>

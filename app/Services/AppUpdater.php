@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Closure;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Native\Desktop\Facades\App as NativeApp;
@@ -89,8 +90,9 @@ class AppUpdater
 
     /**
      * @param  array{version: string, notes: ?string, dmg_url: ?string, html_url: ?string}  $latest
+     * @param  (Closure(int $totalBytes, int $downloadedBytes): void)|null  $onProgress
      */
-    public function install(array $latest): string
+    public function install(array $latest, ?Closure $onProgress = null): string
     {
         $dmgUrl = $latest['dmg_url'] ?? null;
 
@@ -107,8 +109,16 @@ class AppUpdater
         $target = $this->downloadPath((string) $latest['version']);
 
         try {
-            $response = Http::timeout(600)
-                ->withOptions(['sink' => $target, 'allow_redirects' => true])
+            $response = Http::timeout(1800)
+                ->withOptions([
+                    'sink' => $target,
+                    'allow_redirects' => true,
+                    'progress' => function (int $totalBytes, int $downloadedBytes) use ($onProgress): void {
+                        if ($onProgress) {
+                            $onProgress($totalBytes, $downloadedBytes);
+                        }
+                    },
+                ])
                 ->withHeaders(['User-Agent' => 'Sebi-naproti-updater'])
                 ->get($dmgUrl);
 

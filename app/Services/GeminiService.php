@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Setting;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
@@ -169,10 +170,10 @@ class GeminiService
      */
     protected function generate(string $model, array $parts, array $generationConfig = []): string
     {
-        $apiKey = config('therapy.gemini.api_key');
+        $apiKey = Setting::geminiApiKey();
 
         if (! filled($apiKey)) {
-            throw new RuntimeException('Manjka GEMINI_API_KEY v .env datoteki.');
+            throw new RuntimeException('Manjka Gemini API ključ. Vnesi ga v Nastavitvah.');
         }
 
         $payload = [

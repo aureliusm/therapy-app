@@ -146,9 +146,9 @@ new #[Layout('layouts::app')] class extends Component
                 Samodejno naredi povzetek z AI
             </label>
 
-            @if ($runAi && ! config('therapy.gemini.api_key'))
+            @if ($runAi && ! \App\Models\Setting::geminiApiKey())
                 <p class="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                    V <code>.env</code> še ni <code>GEMINI_API_KEY</code>. Shrani lahko zapisek, AI povzetek pa bo začel delovati šele po vnosu ključa in zagonu <code>php artisan queue:work</code>.
+                    Gemini API ključ še ni nastavljen. Zapisek lahko shraniš, AI povzetek pa bo deloval šele, ko ključ vneseš v <a href="{{ route('settings') }}" class="underline" wire:navigate>Nastavitvah</a>.
                 </p>
             @endif
         </div>

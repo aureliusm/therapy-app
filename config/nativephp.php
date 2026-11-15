@@ -73,6 +73,7 @@ return [
         'AWS_*',
         'AZURE_*',
         'GITHUB_*',
+        'GEMINI_API_KEY',
         'DO_SPACES_*',
         '*_SECRET',
         'BIFROST_*',
@@ -107,6 +108,13 @@ return [
         'phpunit.xml',
         '.npmrc',
         'vite.config.js',
+        'storage/app/private/*',
+        'storage/logs/*.log',
+        '.claude',
+        '.cursor',
+        '.mcp.json',
+        'boost.json',
+        '.phpunit.result.cache',
     ],
 
     /**
