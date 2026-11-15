@@ -23,12 +23,21 @@ new #[Layout('layouts::app')] class extends Component
     public function refreshSession(): void
     {
         $this->session->refresh();
+
+        // Če job visi predolgo (npr. Gemini timeout), odkleni UI.
+        if ($this->session->isProcessing() && $this->session->updated_at?->lt(now()->subMinutes(3))) {
+            $this->session->update([
+                'status' => filled($this->session->summary) ? 'ready' : 'failed',
+                'error_message' => $this->session->error_message ?: 'Obdelava je trajala predolgo. Poskusi znova.',
+            ]);
+            $this->session->refresh();
+        }
     }
 
     public function retryAi(): void
     {
         ProcessTherapySession::dispatch($this->session->id, retranscribe: blank($this->session->transcript) && $this->session->hasAudio());
-        $this->session->update(['status' => 'processing', 'error_message' => null]);
+        $this->session->update(['status' => 'processing', 'error_message' => null, 'updated_at' => now()]);
         $this->session->refresh();
     }
 
@@ -57,8 +66,11 @@ new #[Layout('layouts::app')] class extends Component
 
         <div class="flex flex-wrap gap-2">
             <a href="{{ route('sessions.edit', [$client, $session]) }}" class="btn-primary" wire:navigate>Uredi</a>
-            @if ($session->hasFailed() || $session->status === 'draft')
-                <button type="button" wire:click="retryAi" class="btn-secondary">Ponovno obdelaj z AI</button>
+            @if ($session->hasFailed() || $session->status === 'draft' || $session->isProcessing())
+                <button type="button" wire:click="retryAi" class="btn-secondary" wire:loading.attr="disabled">
+                    <span wire:loading.remove wire:target="retryAi">Ponovno obdelaj z AI</span>
+                    <span wire:loading wire:target="retryAi">Zaganjam …</span>
+                </button>
             @endif
             <button type="button" wire:click="deleteSession" wire:confirm="Res izbrišem to srečanje?" class="btn-ghost text-brand-light">Izbriši</button>
         </div>
@@ -98,17 +110,44 @@ new #[Layout('layouts::app')] class extends Component
         <div class="grid gap-5 lg:grid-cols-2">
             <section class="app-card space-y-3">
                 <p class="font-script text-brand">intervence</p>
-                <div class="whitespace-pre-wrap text-sm leading-6 text-ink/85">{{ $session->interventions ?: '—' }}</div>
+                @php($interventionItems = \App\Models\TherapySession::bulletItems($session->interventions))
+                @if ($interventionItems === [])
+                    <p class="text-sm text-ink/85">—</p>
+                @else
+                    <ul class="list-disc space-y-2 pl-5 text-sm leading-6 text-ink/85 marker:text-brand">
+                        @foreach ($interventionItems as $item)
+                            <li>{{ $item }}</li>
+                        @endforeach
+                    </ul>
+                @endif
             </section>
             <section class="app-card space-y-3">
                 <p class="font-script text-brand">opozorila in opažanja</p>
-                <div class="whitespace-pre-wrap text-sm leading-6 text-ink/85">{{ $session->warnings ?: '—' }}</div>
+                @php($warningItems = \App\Models\TherapySession::bulletItems($session->warnings))
+                @if ($warningItems === [])
+                    <p class="text-sm text-ink/85">—</p>
+                @else
+                    <ul class="list-disc space-y-2 pl-5 text-sm leading-6 text-ink/85 marker:text-brand">
+                        @foreach ($warningItems as $item)
+                            <li>{{ $item }}</li>
+                        @endforeach
+                    </ul>
+                @endif
             </section>
         </div>
 
         <section class="app-card space-y-3">
             <p class="font-script text-brand">za naslednje srečanje</p>
-            <div class="whitespace-pre-wrap text-sm leading-6 text-ink/85">{{ $session->next_ideas ?: '—' }}</div>
+            @php($nextItems = \App\Models\TherapySession::bulletItems($session->next_ideas))
+            @if ($nextItems === [])
+                <p class="text-sm text-ink/85">—</p>
+            @else
+                <ul class="list-disc space-y-2 pl-5 text-sm leading-6 text-ink/85 marker:text-brand">
+                    @foreach ($nextItems as $item)
+                        <li>{{ $item }}</li>
+                    @endforeach
+                </ul>
+            @endif
         </section>
 
         @if ($session->hasAudio())

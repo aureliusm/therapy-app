@@ -59,6 +59,39 @@ class TherapySession extends Model
         return filled($this->audio_path) && Storage::disk('local')->exists($this->audio_path);
     }
 
+    /**
+     * Pretvori besedilo z alinejami (-, •, 1.) v seznam za prikaz.
+     *
+     * @return list<string>
+     */
+    public static function bulletItems(?string $text): array
+    {
+        if (! filled($text)) {
+            return [];
+        }
+
+        $normalized = str_replace(["\r\n", "\r"], "\n", trim($text));
+        $lines = preg_split('/\n+/', $normalized) ?: [];
+        $items = [];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+
+            if ($line === '' || $line === '—' || $line === '-') {
+                continue;
+            }
+
+            $line = preg_replace('/^([-*•–—]|\d+[.)])\s+/u', '', $line) ?? $line;
+            $line = trim($line);
+
+            if ($line !== '') {
+                $items[] = $line;
+            }
+        }
+
+        return $items;
+    }
+
     public function deleteAudio(): void
     {
         if ($this->audio_path && Storage::disk('local')->exists($this->audio_path)) {

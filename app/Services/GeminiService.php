@@ -58,9 +58,9 @@ class GeminiService
             ."{\n"
             ."  \"summary\": \"povzetek približno pol strani A4\",\n"
             ."  \"topics\": [\"tema 1\", \"tema 2\"],\n"
-            ."  \"interventions\": \"uporabljene intervence\",\n"
-            ."  \"warnings\": \"opozorila in opažanja\",\n"
-            ."  \"next_ideas\": \"ideje in intervence za naslednje srečanje\"\n"
+            ."  \"interventions\": \"alineje, vsaka v novi vrstici z začetkom '- '\",\n"
+            ."  \"warnings\": \"alineje, vsaka v novi vrstici z začetkom '- '\",\n"
+            ."  \"next_ideas\": \"alineje, vsaka v novi vrstici z začetkom '- '\",\n"
             ."}\n\n"
             .($previousContext ? "Kratek kontekst prejšnjih srečanj:\n{$previousContext}\n\n" : '')
             ."Zapisek / transkript srečanja:\n{$transcript}";
@@ -104,12 +104,16 @@ class GeminiService
             $payload['generationConfig'] = $generationConfig;
         }
 
-        $response = Http::timeout(180)
-            ->acceptJson()
-            ->post(
-                "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
-                $payload,
-            );
+        try {
+            $response = Http::timeout(90)
+                ->acceptJson()
+                ->post(
+                    "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
+                    $payload,
+                );
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            throw new RuntimeException('Gemini ne odgovarja (timeout). Preveri internet ali poskusi znova.');
+        }
 
         if ($response->failed()) {
             throw new RuntimeException('Gemini napaka: '.$response->body());

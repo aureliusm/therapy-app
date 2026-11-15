@@ -105,10 +105,24 @@ class AppUpdater
         }
 
         $target = $this->downloadPath((string) $latest['version']);
-        $response = Http::timeout(600)->sink($target)->get($dmgUrl);
 
-        if ($response->failed()) {
-            throw new RuntimeException('Prenos posodobitve ni uspel.');
+        try {
+            $response = Http::timeout(600)
+                ->withOptions(['sink' => $target, 'allow_redirects' => true])
+                ->withHeaders(['User-Agent' => 'Sebi-naproti-updater'])
+                ->get($dmgUrl);
+
+            if ($response->failed() || ! is_file($target) || filesize($target) < 1_000_000) {
+                throw new RuntimeException('Prenos posodobitve ni uspel.');
+            }
+        } catch (\Throwable $e) {
+            if (filled($latest['html_url'] ?? null)) {
+                $this->openUrl((string) $latest['html_url']);
+
+                return 'Samodejni prenos ni uspel, zato sem odprl stran z releaseom. Prenesi DMG tam in namesti.';
+            }
+
+            throw $e instanceof RuntimeException ? $e : new RuntimeException('Prenos posodobitve ni uspel.');
         }
 
         $this->openPath($target);
@@ -185,17 +199,38 @@ class AppUpdater
 
     protected function downloadPath(string $version): string
     {
-        $dir = rtrim((string) config('therapy.updater.download_dir'), '/');
-
-        if ($dir === '' || ! is_dir($dir)) {
-            $dir = $_SERVER['HOME'].'/Downloads';
-        }
+        $configured = rtrim((string) config('therapy.updater.download_dir'), '/');
+        $dir = ($configured !== '' && is_dir($configured))
+            ? $configured
+            : $this->homeDirectory().'/Downloads';
 
         if (! is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
 
         return $dir.'/Sebi-naproti-'.$this->normalizeVersion($version).'.dmg';
+    }
+
+    protected function homeDirectory(): string
+    {
+        foreach ([
+            getenv('HOME') ?: null,
+            $_ENV['HOME'] ?? null,
+            $_SERVER['HOME'] ?? null,
+        ] as $home) {
+            if (is_string($home) && $home !== '' && is_dir($home)) {
+                return $home;
+            }
+        }
+
+        if (function_exists('posix_getpwuid') && function_exists('posix_geteuid')) {
+            $dir = posix_getpwuid(posix_geteuid())['dir'] ?? null;
+            if (is_string($dir) && $dir !== '' && is_dir($dir)) {
+                return $dir;
+            }
+        }
+
+        return storage_path('app/updates');
     }
 
     protected function openPath(string $path): void

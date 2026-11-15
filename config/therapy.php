@@ -3,8 +3,8 @@
 return [
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
-        'summary_model' => env('GEMINI_SUMMARY_MODEL', 'gemini-2.5-flash'),
-        'transcribe_model' => env('GEMINI_TRANSCRIBE_MODEL', 'gemini-2.5-flash'),
+        'summary_model' => env('GEMINI_SUMMARY_MODEL', 'gemini-3.6-flash'),
+        'transcribe_model' => env('GEMINI_TRANSCRIBE_MODEL', 'gemini-3.6-flash'),
         'max_chunk_bytes' => (int) env('GEMINI_MAX_AUDIO_CHUNK_BYTES', 4_000_000),
     ],
 
