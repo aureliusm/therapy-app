@@ -11,7 +11,7 @@ new #[Layout('layouts::app')] class extends Component
 
     public function mount(Client $client): void
     {
-        $this->client = $client->load(['sessions' => fn ($q) => $q->orderByDesc('session_date')->orderByDesc('id')]);
+        $this->client = $client->load('sessions');
     }
 
     public function title(): string
@@ -51,6 +51,7 @@ new #[Layout('layouts::app')] class extends Component
 
             @foreach ($client->sessions as $session)
                 <a href="{{ route('sessions.show', [$client, $session]) }}"
+                   wire:key="session-{{ $session->id }}"
                    class="relative mb-5 flex gap-4 rounded-[1.25rem] p-1 transition hover:bg-white/60"
                    wire:navigate>
                     <div class="relative z-10 mt-6 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-brand bg-cream">

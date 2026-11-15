@@ -2,12 +2,17 @@
 
 namespace App\Models;
 
+use Database\Factories\TherapySessionFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
 
 class TherapySession extends Model
 {
+    /** @use HasFactory<TherapySessionFactory> */
+    use HasFactory;
+
     protected $table = 'therapy_sessions';
 
     protected $fillable = [
@@ -32,6 +37,15 @@ class TherapySession extends Model
             'session_date' => 'date',
             'topics' => 'array',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::deleting(function (TherapySession $session): void {
+            if ($session->audio_path) {
+                Storage::disk('local')->delete($session->audio_path);
+            }
+        });
     }
 
     public function client(): BelongsTo
@@ -94,7 +108,7 @@ class TherapySession extends Model
 
     public function deleteAudio(): void
     {
-        if ($this->audio_path && Storage::disk('local')->exists($this->audio_path)) {
+        if ($this->audio_path) {
             Storage::disk('local')->delete($this->audio_path);
         }
 

@@ -24,8 +24,8 @@ new #[Layout('layouts::app')] class extends Component
     {
         $this->session->refresh();
 
-        // Če job visi predolgo (npr. Gemini timeout), odkleni UI.
-        if ($this->session->isProcessing() && $this->session->updated_at?->lt(now()->subMinutes(3))) {
+        // Če worker ne teče (npr. aplikacija zaprta med obdelavo), odkleni UI. Prag mora biti daljši od timeouta joba.
+        if ($this->session->isProcessing() && $this->session->updated_at?->lt(now()->subMinutes(6))) {
             $this->session->update([
                 'status' => filled($this->session->summary) ? 'ready' : 'failed',
                 'error_message' => $this->session->error_message ?: 'Obdelava je trajala predolgo. Poskusi znova.',
@@ -43,7 +43,6 @@ new #[Layout('layouts::app')] class extends Component
 
     public function deleteSession(): void
     {
-        $this->session->deleteAudio();
         $this->session->delete();
         $this->redirect(route('clients.show', $this->client), navigate: true);
     }
@@ -55,7 +54,7 @@ new #[Layout('layouts::app')] class extends Component
 };
 ?>
 
-<div wire:poll.3s="refreshSession">
+<div>
     <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
             <a href="{{ route('clients.show', $client) }}" class="btn-ghost -ml-3" wire:navigate>← {{ $client->name }}</a>
@@ -77,7 +76,7 @@ new #[Layout('layouts::app')] class extends Component
     </div>
 
     @if ($session->isProcessing())
-        <div class="app-card mb-6 border-brand/20 bg-brand/5">
+        <div wire:poll.3s="refreshSession" class="app-card mb-6 border-brand/20 bg-brand/5">
             <p class="font-medium text-mauve-dark">AI pripravlja povzetek …</p>
             <p class="mt-1 text-sm text-muted">Stran se osvežuje sama. Lahko počakaš tukaj.</p>
         </div>
@@ -110,44 +109,17 @@ new #[Layout('layouts::app')] class extends Component
         <div class="grid gap-5 lg:grid-cols-2">
             <section class="app-card space-y-3">
                 <p class="font-script text-brand">intervence</p>
-                @php($interventionItems = \App\Models\TherapySession::bulletItems($session->interventions))
-                @if ($interventionItems === [])
-                    <p class="text-sm text-ink/85">—</p>
-                @else
-                    <ul class="list-disc space-y-2 pl-5 text-sm leading-6 text-ink/85 marker:text-brand">
-                        @foreach ($interventionItems as $item)
-                            <li>{{ $item }}</li>
-                        @endforeach
-                    </ul>
-                @endif
+                <x-bullet-list :text="$session->interventions" />
             </section>
             <section class="app-card space-y-3">
                 <p class="font-script text-brand">opozorila in opažanja</p>
-                @php($warningItems = \App\Models\TherapySession::bulletItems($session->warnings))
-                @if ($warningItems === [])
-                    <p class="text-sm text-ink/85">—</p>
-                @else
-                    <ul class="list-disc space-y-2 pl-5 text-sm leading-6 text-ink/85 marker:text-brand">
-                        @foreach ($warningItems as $item)
-                            <li>{{ $item }}</li>
-                        @endforeach
-                    </ul>
-                @endif
+                <x-bullet-list :text="$session->warnings" />
             </section>
         </div>
 
         <section class="app-card space-y-3">
             <p class="font-script text-brand">za naslednje srečanje</p>
-            @php($nextItems = \App\Models\TherapySession::bulletItems($session->next_ideas))
-            @if ($nextItems === [])
-                <p class="text-sm text-ink/85">—</p>
-            @else
-                <ul class="list-disc space-y-2 pl-5 text-sm leading-6 text-ink/85 marker:text-brand">
-                    @foreach ($nextItems as $item)
-                        <li>{{ $item }}</li>
-                    @endforeach
-                </ul>
-            @endif
+            <x-bullet-list :text="$session->next_ideas" />
         </section>
 
         @if ($session->hasAudio())

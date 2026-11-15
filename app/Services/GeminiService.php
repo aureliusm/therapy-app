@@ -2,10 +2,14 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Throwable;
 
 class GeminiService
 {
@@ -14,30 +18,51 @@ class GeminiService
         $chunks = $this->chunkAudio($absolutePath, $mimeType);
         $parts = [];
 
-        foreach ($chunks as $index => $chunkPath) {
-            $parts[] = $this->generate(
-                config('therapy.gemini.transcribe_model'),
-                [
-                    ['text' => 'Prepiši govorjeni zapis v slovenščini. Vrni samo čisto besedilo transkripta, brez uvoda in komentarjev. Če je več govorcev, jih poimenuj Terapevtka in Klient, če je to razvidno.'],
+        try {
+            foreach ($chunks as $index => $chunkPath) {
+                $parts[] = $this->generate(
+                    config('therapy.gemini.transcribe_model'),
                     [
-                        'inlineData' => [
-                            'mimeType' => $mimeType,
-                            'data' => base64_encode((string) file_get_contents($chunkPath)),
+                        ['text' => 'Prepiši govorjeni zapis v slovenščini. Vrni samo čisto besedilo transkripta, brez uvoda in komentarjev. Če je več govorcev, jih poimenuj Terapevtka in Klient, če je to razvidno.'],
+                        [
+                            'inlineData' => [
+                                'mimeType' => $mimeType,
+                                'data' => base64_encode((string) file_get_contents($chunkPath)),
+                            ],
                         ],
                     ],
-                ],
-            );
+                );
 
-            if ($chunkPath !== $absolutePath && is_file($chunkPath)) {
-                @unlink($chunkPath);
+                if ($index < count($chunks) - 1) {
+                    Sleep::sleep(2);
+                }
             }
-
-            if ($index < count($chunks) - 1) {
-                sleep(2);
-            }
+        } finally {
+            $this->cleanupChunks($chunks, $absolutePath);
         }
 
         return trim(implode("\n\n", array_filter($parts)));
+    }
+
+    /**
+     * @param  list<string>  $chunks
+     */
+    protected function cleanupChunks(array $chunks, string $originalPath): void
+    {
+        $chunkDirectory = null;
+
+        foreach ($chunks as $chunkPath) {
+            if ($chunkPath === $originalPath) {
+                continue;
+            }
+
+            $chunkDirectory = dirname($chunkPath);
+            @unlink($chunkPath);
+        }
+
+        if ($chunkDirectory !== null) {
+            @rmdir($chunkDirectory);
+        }
     }
 
     /**
@@ -54,32 +79,88 @@ class GeminiService
         $prompt = trim($basePrompt)."\n\n"
             ."Vrsta terapije za to srečanje: {$therapyType}.\n"
             ."Intervence in predloge prilagodi tej vrsti terapije.\n\n"
-            ."Vrni SAMO veljaven JSON z naslednjimi ključi:\n"
-            ."{\n"
-            ."  \"summary\": \"povzetek približno pol strani A4\",\n"
-            ."  \"topics\": [\"tema 1\", \"tema 2\"],\n"
-            ."  \"interventions\": \"alineje, vsaka v novi vrstici z začetkom '- '\",\n"
-            ."  \"warnings\": \"alineje, vsaka v novi vrstici z začetkom '- '\",\n"
-            ."  \"next_ideas\": \"alineje, vsaka v novi vrstici z začetkom '- '\",\n"
-            ."}\n\n"
+            ."Vrni JSON s ključi:\n"
+            ."- summary: povzetek, približno pol strani A4,\n"
+            ."- topics: seznam ključnih tem (kratke fraze),\n"
+            ."- interventions: seznam uporabljenih intervenc,\n"
+            ."- warnings: seznam opažanj in opozoril,\n"
+            ."- next_ideas: seznam idej in intervenc za naslednje srečanje.\n\n"
             .($previousContext ? "Kratek kontekst prejšnjih srečanj:\n{$previousContext}\n\n" : '')
             ."Zapisek / transkript srečanja:\n{$transcript}";
+
+        $stringList = ['type' => 'ARRAY', 'items' => ['type' => 'STRING']];
 
         $text = $this->generate(
             config('therapy.gemini.summary_model'),
             [['text' => $prompt]],
-            ['responseMimeType' => 'application/json'],
+            [
+                'responseMimeType' => 'application/json',
+                'responseSchema' => [
+                    'type' => 'OBJECT',
+                    'properties' => [
+                        'summary' => ['type' => 'STRING'],
+                        'topics' => $stringList,
+                        'interventions' => $stringList,
+                        'warnings' => $stringList,
+                        'next_ideas' => $stringList,
+                    ],
+                    'required' => ['summary', 'topics', 'interventions', 'warnings', 'next_ideas'],
+                ],
+            ],
         );
 
         $json = $this->extractJson($text);
 
         return [
-            'summary' => (string) ($json['summary'] ?? ''),
-            'topics' => array_values(array_filter(array_map('strval', $json['topics'] ?? []))),
-            'interventions' => (string) ($json['interventions'] ?? ''),
-            'warnings' => (string) ($json['warnings'] ?? ''),
-            'next_ideas' => (string) ($json['next_ideas'] ?? ''),
+            'summary' => $this->stringValue($json['summary'] ?? ''),
+            'topics' => $this->listValue($json['topics'] ?? []),
+            'interventions' => $this->bulletText($json['interventions'] ?? ''),
+            'warnings' => $this->bulletText($json['warnings'] ?? ''),
+            'next_ideas' => $this->bulletText($json['next_ideas'] ?? ''),
         ];
+    }
+
+    protected function stringValue(mixed $value): string
+    {
+        if (is_array($value)) {
+            return trim(implode("\n", $this->listValue($value)));
+        }
+
+        return is_scalar($value) ? trim((string) $value) : '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function listValue(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = preg_split('/\r\n|\r|\n/', $value) ?: [];
+        }
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            fn (mixed $item): string => is_scalar($item) ? trim((string) $item) : '',
+            $value,
+        )));
+    }
+
+    /**
+     * Seznam shrani kot alineje ("- ..."), ki jih prikaz in urejanje že razumeta.
+     */
+    protected function bulletText(mixed $value): string
+    {
+        if (is_string($value)) {
+            return trim($value);
+        }
+
+        return implode("\n", array_map(
+            fn (string $item): string => '- '.ltrim($item, "-*• \t"),
+            $this->listValue($value),
+        ));
     }
 
     /**
@@ -107,22 +188,39 @@ class GeminiService
         try {
             $response = Http::timeout(90)
                 ->acceptJson()
+                ->withHeaders(['x-goog-api-key' => $apiKey])
+                ->retry(
+                    3,
+                    fn (int $attempt): int => $attempt * 3000,
+                    fn (Throwable $e): bool => $e instanceof RequestException
+                        && in_array($e->response->status(), [429, 500, 503], true),
+                    throw: false,
+                )
                 ->post(
-                    "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
+                    "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent",
                     $payload,
                 );
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException) {
             throw new RuntimeException('Gemini ne odgovarja (timeout). Preveri internet ali poskusi znova.');
         }
 
         if ($response->failed()) {
-            throw new RuntimeException('Gemini napaka: '.$response->body());
+            $message = data_get($response->json(), 'error.message') ?: Str::limit($response->body(), 300);
+
+            throw new RuntimeException("Gemini napaka ({$response->status()}): {$message}");
         }
 
-        $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
+        $text = collect(data_get($response->json(), 'candidates.0.content.parts', []))
+            ->reject(fn (array $part): bool => (bool) ($part['thought'] ?? false))
+            ->pluck('text')
+            ->filter()
+            ->implode('');
 
         if (! filled($text)) {
-            throw new RuntimeException('Gemini ni vrnil besedila.');
+            $reason = data_get($response->json(), 'candidates.0.finishReason')
+                ?? data_get($response->json(), 'promptFeedback.blockReason');
+
+            throw new RuntimeException('Gemini ni vrnil besedila'.($reason ? " ({$reason})." : '.'));
         }
 
         return trim($text);
@@ -140,16 +238,20 @@ class GeminiService
             return [$absolutePath];
         }
 
-        if (! $this->ffmpegAvailable() || ! Str::contains($mimeType, ['webm', 'ogg', 'mp3', 'mpeg', 'wav', 'mp4', 'm4a'])) {
+        $ffmpeg = $this->ffmpegPath();
+
+        if ($ffmpeg === null || ! Str::contains($mimeType, ['webm', 'ogg', 'mp3', 'mpeg', 'wav', 'mp4', 'm4a'])) {
             return [$absolutePath];
         }
 
+        $extension = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION)) ?: 'webm';
+        $extension = ['weba' => 'webm', 'oga' => 'ogg', 'mpga' => 'mp3'][$extension] ?? $extension;
         $dir = sys_get_temp_dir().'/therapy-audio-'.Str::random(8);
         mkdir($dir);
 
-        $pattern = $dir.'/chunk_%03d.webm';
+        $pattern = $dir.'/chunk_%03d.'.$extension;
         $result = Process::timeout(120)->run([
-            'ffmpeg',
+            $ffmpeg,
             '-y',
             '-i', $absolutePath,
             '-f', 'segment',
@@ -165,7 +267,7 @@ class GeminiService
             return [$absolutePath];
         }
 
-        $chunks = collect(glob($dir.'/chunk_*.webm') ?: [])
+        $chunks = collect(glob($dir.'/chunk_*.'.$extension) ?: [])
             ->sort()
             ->values()
             ->all();
@@ -173,9 +275,20 @@ class GeminiService
         return $chunks !== [] ? $chunks : [$absolutePath];
     }
 
-    protected function ffmpegAvailable(): bool
+    /**
+     * Zapakirana aplikacija, zagnana iz Finderja, nima Homebrew poti v PATH.
+     */
+    protected function ffmpegPath(): ?string
     {
-        return Process::run(['which', 'ffmpeg'])->successful();
+        foreach (['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg'] as $path) {
+            if (is_executable($path)) {
+                return $path;
+            }
+        }
+
+        $result = Process::run(['which', 'ffmpeg']);
+
+        return $result->successful() && filled(trim($result->output())) ? trim($result->output()) : null;
     }
 
     /**

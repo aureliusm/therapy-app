@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Client;
+use App\Models\Setting;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -10,6 +11,7 @@ new #[Layout('layouts::app')] #[Title('Klienti')] class extends Component
     public function with(): array
     {
         return [
+            'defaultTherapyType' => Setting::current()->default_therapy_type,
             'clients' => Client::query()
                 ->with('latestSession')
                 ->withCount('sessions')
@@ -20,7 +22,7 @@ new #[Layout('layouts::app')] #[Title('Klienti')] class extends Component
 
     public function deleteClient(int $clientId): void
     {
-        Client::query()->whereKey($clientId)->delete();
+        Client::query()->findOrFail($clientId)->delete();
     }
 };
 ?>
@@ -45,12 +47,12 @@ new #[Layout('layouts::app')] #[Title('Klienti')] class extends Component
     @else
         <div class="grid gap-4 sm:grid-cols-2">
             @foreach ($clients as $client)
-                <article class="app-card group flex flex-col gap-4 transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(69,9,32,0.1)]">
+                <article wire:key="client-{{ $client->id }}" class="app-card group flex flex-col gap-4 transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(69,9,32,0.1)]">
                     <a href="{{ route('clients.show', $client) }}" class="block space-y-3" wire:navigate>
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <h3 class="text-xl font-semibold tracking-tight text-ink">{{ $client->name }}</h3>
-                                <p class="mt-1 text-sm text-mauve-dark">{{ $client->resolvedTherapyType() }}</p>
+                                <p class="mt-1 text-sm text-mauve-dark">{{ $client->resolvedTherapyType($defaultTherapyType) }}</p>
                             </div>
                             <span class="rounded-full bg-cream px-3 py-1 text-xs text-muted">
                                 {{ $client->sessions_count }} srečanj

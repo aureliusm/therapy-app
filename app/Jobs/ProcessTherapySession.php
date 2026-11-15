@@ -19,6 +19,8 @@ class ProcessTherapySession implements ShouldQueue
 
     public int $timeout = 300;
 
+    public int $backoff = 15;
+
     public function __construct(
         public int $sessionId,
         public bool $retranscribe = false,
@@ -94,5 +96,19 @@ class ProcessTherapySession implements ShouldQueue
 
             throw $e;
         }
+    }
+
+    /**
+     * Pokliče se tudi ob timeoutu, ko handle() ne pride do catch bloka.
+     */
+    public function failed(?Throwable $exception): void
+    {
+        TherapySession::query()
+            ->whereKey($this->sessionId)
+            ->where('status', 'processing')
+            ->update([
+                'status' => 'failed',
+                'error_message' => $exception?->getMessage() ?: 'Obdelava ni uspela. Poskusi znova.',
+            ]);
     }
 }

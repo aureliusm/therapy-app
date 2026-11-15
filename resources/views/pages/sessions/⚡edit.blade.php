@@ -77,6 +77,8 @@ new #[Layout('layouts::app')] class extends Component
             $this->session->deleteAudio();
         }
 
+        $hasNewAudio = (bool) $this->audio;
+
         if ($this->audio) {
             if ($this->session->audio_path) {
                 $this->session->deleteAudio();
@@ -100,7 +102,7 @@ new #[Layout('layouts::app')] class extends Component
             $this->session->status = 'processing';
             $this->session->error_message = null;
             $this->session->save();
-            ProcessTherapySession::dispatch($this->session->id, retranscribe: false);
+            ProcessTherapySession::dispatch($this->session->id, retranscribe: $hasNewAudio);
         } else {
             if ($this->session->status === 'draft' && filled($this->session->summary)) {
                 $this->session->status = 'ready';
@@ -130,6 +132,7 @@ new #[Layout('layouts::app')] class extends Component
             <div>
                 <label class="field-label" for="session_date">Datum</label>
                 <input id="session_date" type="date" wire:model="session_date" class="field-input">
+                @error('session_date') <p class="mt-1 text-sm text-brand-light">{{ $message }}</p> @enderror
             </div>
             <div>
                 <label class="field-label" for="therapy_type">Vrsta terapije</label>
@@ -185,15 +188,19 @@ new #[Layout('layouts::app')] class extends Component
                 <label class="field-label" for="audio">Zamenjaj / dodaj posnetek</label>
                 <input id="audio" type="file" wire:model="audio" accept="audio/*,video/webm" class="field-input">
                 <div wire:loading wire:target="audio" class="mt-1 text-sm text-mauve-dark">Nalagam …</div>
+                @error('audio') <p class="mt-1 text-sm text-brand-light">{{ $message }}</p> @enderror
             </div>
             <label class="flex items-center gap-3 text-sm">
                 <input type="checkbox" wire:model.live="rerunAi" class="size-4 rounded border-brand/30 text-brand focus:ring-brand/30">
-                Po shranjevanju znova zaženi AI povzetek iz transkripta
+                Po shranjevanju znova zaženi AI povzetek (nov posnetek se najprej prepiše)
             </label>
         </section>
 
         <div class="flex flex-wrap gap-3">
-            <button type="submit" class="btn-primary">Shrani</button>
+            <button type="submit" class="btn-primary" wire:loading.attr="disabled">
+                <span wire:loading.remove wire:target="save">Shrani</span>
+                <span wire:loading wire:target="save">Shranjujem …</span>
+            </button>
             <a href="{{ route('sessions.show', [$client, $session]) }}" class="btn-secondary" wire:navigate>Prekliči</a>
         </div>
     </form>
