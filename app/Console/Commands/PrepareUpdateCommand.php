@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 
 class PrepareUpdateCommand extends Command
 {
@@ -17,7 +18,9 @@ class PrepareUpdateCommand extends Command
     public function handle(): int
     {
         if ($version = $this->option('set-version')) {
-            $this->bumpVersion((string) $version);
+            $version = ltrim((string) $version, 'v');
+            $this->bumpVersion($version);
+            $this->applyVersion($version);
             $this->info('Verzija nastavljena na '.$version);
         }
 
@@ -32,6 +35,10 @@ class PrepareUpdateCommand extends Command
             if ($exit !== self::SUCCESS) {
                 return $exit;
             }
+
+            // native:build odstrani dev odvisnosti iz vendor/
+            $this->info('Obnavljam composer odvisnosti …');
+            Process::path(base_path())->timeout(300)->run(['composer', 'install', '--no-interaction']);
         }
 
         $version = (string) config('nativephp.version');
@@ -73,27 +80,30 @@ class PrepareUpdateCommand extends Command
         $this->info('Pripravljeno v releases/');
         $this->line('- '.$dmgName);
         $this->line('- update.json');
-
-        if ($dmgUrl === null) {
-            $this->newLine();
-            $this->warn('Nastavi UPDATE_PUBLIC_BASE_URL v .env (javni URL do mape z DMG), nato ponovno zaženi ta ukaz.');
-            $this->warn('V aplikaciji nastavi UPDATE_MANIFEST_URL na javni URL do update.json.');
-        } else {
-            $this->newLine();
-            $this->line('Manifest URL naj bo: '.$publicBase.'/update.json');
-            $this->line('V .env: UPDATE_MANIFEST_URL='.$publicBase.'/update.json');
-        }
+        $this->newLine();
+        $this->line('Objavi na GitHub:');
+        $this->line('  gh release create v'.$version.' "releases/'.$dmgName.'" --title "v'.$version.'" --notes '.escapeshellarg((string) ($this->option('notes') ?: 'Posodobitev')));
 
         return self::SUCCESS;
     }
 
+    protected function applyVersion(string $version): void
+    {
+        $version = ltrim($version, 'v');
+        config(['nativephp.version' => $version]);
+        putenv('NATIVEPHP_APP_VERSION='.$version);
+        $_ENV['NATIVEPHP_APP_VERSION'] = $version;
+        $_SERVER['NATIVEPHP_APP_VERSION'] = $version;
+    }
+
     protected function bumpVersion(string $version): void
     {
+        $version = ltrim($version, 'v');
         $path = config_path('nativephp.php');
         $contents = File::get($path);
         $contents = preg_replace(
             "/('version'\\s*=>\\s*env\\('NATIVEPHP_APP_VERSION',\\s*')([^']*)('\\))/",
-            '${1}'.ltrim($version, 'v').'${3}',
+            '${1}'.$version.'${3}',
             $contents,
             1
         );
@@ -104,9 +114,9 @@ class PrepareUpdateCommand extends Command
         if (is_file($env)) {
             $envContents = File::get($env);
             if (str_contains($envContents, 'NATIVEPHP_APP_VERSION=')) {
-                $envContents = preg_replace('/^NATIVEPHP_APP_VERSION=.*$/m', 'NATIVEPHP_APP_VERSION='.ltrim($version, 'v'), $envContents);
+                $envContents = preg_replace('/^NATIVEPHP_APP_VERSION=.*$/m', 'NATIVEPHP_APP_VERSION='.$version, $envContents);
             } else {
-                $envContents = rtrim($envContents)."\nNATIVEPHP_APP_VERSION=".ltrim($version, 'v')."\n";
+                $envContents = rtrim($envContents)."\nNATIVEPHP_APP_VERSION=".$version."\n";
             }
             File::put($env, $envContents);
         }

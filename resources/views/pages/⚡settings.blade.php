@@ -147,9 +147,5 @@ new #[Layout('layouts::app')] #[Title('Nastavitve')] class extends Component
             @endif
         </div>
 
-        <p class="text-xs text-muted">
-            Za objavo nove različice: <code class="text-mauve-dark">php artisan app:prepare-update --build --set-version=1.0.1</code>,
-            naloži vsebino mape <code class="text-mauve-dark">releases/</code> na javni URL in nastavi <code class="text-mauve-dark">UPDATE_MANIFEST_URL</code>.
-        </p>
     </section>
 </div>

@@ -14,9 +14,9 @@ return [
         // Osnova za URL-je v update.json, npr. https://example.com/sebi-updates
         'public_base_url' => env('UPDATE_PUBLIC_BASE_URL'),
         'download_dir' => env('UPDATE_DOWNLOAD_DIR'),
-        // Alternativa: GitHub Releases
-        'github_owner' => env('GITHUB_OWNER'),
-        'github_repo' => env('GITHUB_REPO'),
+        // GitHub Releases (privzeto ta repo)
+        'github_owner' => env('GITHUB_OWNER', 'aureliusm'),
+        'github_repo' => env('GITHUB_REPO', 'therapy-app'),
         'github_token' => env('GITHUB_TOKEN'),
     ],
 
