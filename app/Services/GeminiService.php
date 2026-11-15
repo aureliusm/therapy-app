@@ -72,11 +72,14 @@ class GeminiService
      *     topics: list<string>,
      *     interventions: string,
      *     warnings: string,
-     *     next_ideas: string
+     *     next_ideas: string,
+     *     other_approaches: string
      * }
      */
     public function summarize(string $transcript, string $therapyType, string $basePrompt, ?string $previousContext = null): array
     {
+        $otherApproaches = implode(', ', $this->otherApproaches($therapyType));
+
         $prompt = trim($basePrompt)."\n\n"
             ."Vrsta terapije za to srečanje: {$therapyType}.\n"
             ."Intervence in predloge prilagodi tej vrsti terapije.\n\n"
@@ -85,7 +88,9 @@ class GeminiService
             ."- topics: seznam ključnih tem (kratke fraze),\n"
             ."- interventions: seznam uporabljenih intervenc,\n"
             ."- warnings: seznam opažanj in opozoril,\n"
-            ."- next_ideas: seznam idej in intervenc za naslednje srečanje.\n\n"
+            ."- next_ideas: seznam idej in intervenc za naslednje srečanje,\n"
+            ."- other_approaches: po eno konkretno priporočilo za delo s klientom iz vsake od teh psihoterapevtskih smeri: {$otherApproaches}. "
+            ."Za vsako smer vrni approach (ime smeri, kot je navedeno) in recommendation (priporočilo v enem do dveh stavkih).\n\n"
             .($previousContext ? "Kratek kontekst prejšnjih srečanj:\n{$previousContext}\n\n" : '')
             ."Zapisek / transkript srečanja:\n{$transcript}";
 
@@ -104,8 +109,19 @@ class GeminiService
                         'interventions' => $stringList,
                         'warnings' => $stringList,
                         'next_ideas' => $stringList,
+                        'other_approaches' => [
+                            'type' => 'ARRAY',
+                            'items' => [
+                                'type' => 'OBJECT',
+                                'properties' => [
+                                    'approach' => ['type' => 'STRING'],
+                                    'recommendation' => ['type' => 'STRING'],
+                                ],
+                                'required' => ['approach', 'recommendation'],
+                            ],
+                        ],
                     ],
-                    'required' => ['summary', 'topics', 'interventions', 'warnings', 'next_ideas'],
+                    'required' => ['summary', 'topics', 'interventions', 'warnings', 'next_ideas', 'other_approaches'],
                 ],
             ],
         );
@@ -118,7 +134,38 @@ class GeminiService
             'interventions' => $this->bulletText($json['interventions'] ?? ''),
             'warnings' => $this->bulletText($json['warnings'] ?? ''),
             'next_ideas' => $this->bulletText($json['next_ideas'] ?? ''),
+            'other_approaches' => $this->approachRecommendationsText($json['other_approaches'] ?? []),
         ];
+    }
+
+    /**
+     * Vse vrste terapije razen trenutne in splošne izbire "Drugo".
+     *
+     * @return list<string>
+     */
+    protected function otherApproaches(string $therapyType): array
+    {
+        return array_values(array_filter(
+            config('therapy.therapy_types'),
+            fn (string $type): bool => ! in_array($type, [$therapyType, 'Drugo'], true),
+        ));
+    }
+
+    /**
+     * Priporočila shrani kot alineje "- Smer: priporočilo".
+     */
+    protected function approachRecommendationsText(mixed $value): string
+    {
+        if (! is_array($value)) {
+            return $this->bulletText($value);
+        }
+
+        return $this->bulletText(array_map(
+            fn (mixed $item): string => is_array($item)
+                ? trim($this->stringValue($item['approach'] ?? '').': '.$this->stringValue($item['recommendation'] ?? ''), ': ')
+                : $this->stringValue($item),
+            $value,
+        ));
     }
 
     protected function stringValue(mixed $value): string

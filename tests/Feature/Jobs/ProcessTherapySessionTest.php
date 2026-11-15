@@ -43,6 +43,37 @@ class ProcessTherapySessionTest extends TestCase
         $this->assertSame('- Raziskati odnos s šefom', $session->next_ideas);
     }
 
+    public function test_stores_one_recommendation_per_other_therapy_approach(): void
+    {
+        config(['therapy.gemini.api_key' => 'test-key']);
+        Http::preventStrayRequests();
+        Http::fake([
+            self::GEMINI_URL => Http::response($this->geminiText(json_encode([
+                'summary' => 'Povzetek', 'topics' => [], 'interventions' => [], 'warnings' => [], 'next_ideas' => [],
+                'other_approaches' => [
+                    ['approach' => 'Geštalt terapija', 'recommendation' => 'Delo s praznim stolom.'],
+                    ['approach' => 'Telesna terapija', 'recommendation' => 'Opazovanje dihanja.'],
+                ],
+            ]))),
+        ]);
+        $session = TherapySession::factory()->processing()->create(['therapy_type' => 'Transakcijska analiza (TA)']);
+
+        (new ProcessTherapySession($session->id))->handle(app(GeminiService::class));
+
+        $this->assertSame(
+            "- Geštalt terapija: Delo s praznim stolom.\n- Telesna terapija: Opazovanje dihanja.",
+            $session->refresh()->other_approaches,
+        );
+        Http::assertSent(function (Request $request): bool {
+            $prompt = data_get($request->data(), 'contents.0.parts.0.text');
+            $approachesLine = str($prompt)->after('- other_approaches:')->before("\n")->toString();
+
+            return str_contains($approachesLine, 'Geštalt terapija, Telesna terapija, Integrativna')
+                && ! str_contains($approachesLine, 'Transakcijska analiza')
+                && ! str_contains($approachesLine, 'Drugo');
+        });
+    }
+
     public function test_sends_api_key_in_header_instead_of_url(): void
     {
         config(['therapy.gemini.api_key' => 'test-key']);

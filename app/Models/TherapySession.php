@@ -27,6 +27,7 @@ class TherapySession extends Model
         'interventions',
         'warnings',
         'next_ideas',
+        'other_approaches',
         'status',
         'error_message',
     ];

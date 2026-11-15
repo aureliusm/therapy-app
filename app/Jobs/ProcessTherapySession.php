@@ -85,6 +85,7 @@ class ProcessTherapySession implements ShouldQueue
                 'interventions' => $result['interventions'],
                 'warnings' => $result['warnings'],
                 'next_ideas' => $result['next_ideas'],
+                'other_approaches' => $result['other_approaches'],
                 'status' => 'ready',
                 'error_message' => null,
             ]);

@@ -31,6 +31,8 @@ new #[Layout('layouts::app')] class extends Component
 
     public string $next_ideas = '';
 
+    public string $other_approaches = '';
+
     public $audio;
 
     public bool $removeAudio = false;
@@ -51,6 +53,7 @@ new #[Layout('layouts::app')] class extends Component
         $this->interventions = (string) $session->interventions;
         $this->warnings = (string) $session->warnings;
         $this->next_ideas = (string) $session->next_ideas;
+        $this->other_approaches = (string) $session->other_approaches;
     }
 
     public function save(): void
@@ -64,6 +67,7 @@ new #[Layout('layouts::app')] class extends Component
             'interventions' => ['nullable', 'string'],
             'warnings' => ['nullable', 'string'],
             'next_ideas' => ['nullable', 'string'],
+            'other_approaches' => ['nullable', 'string'],
             'audio' => ['nullable', 'file', 'max:51200', 'mimetypes:audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/mp3,video/webm'],
         ]);
 
@@ -96,6 +100,7 @@ new #[Layout('layouts::app')] class extends Component
             'interventions' => $validated['interventions'] ?: null,
             'warnings' => $validated['warnings'] ?: null,
             'next_ideas' => $validated['next_ideas'] ?: null,
+            'other_approaches' => $validated['other_approaches'] ?: null,
         ]);
 
         if ($this->rerunAi) {
@@ -168,6 +173,11 @@ new #[Layout('layouts::app')] class extends Component
         <section class="app-card space-y-3">
             <p class="font-script text-brand">za naslednje srečanje</p>
             <textarea wire:model="next_ideas" class="field-textarea"></textarea>
+        </section>
+
+        <section class="app-card space-y-3">
+            <p class="font-script text-brand">priporočila drugih smeri</p>
+            <textarea wire:model="other_approaches" class="field-textarea"></textarea>
         </section>
 
         <section class="app-card space-y-3">
