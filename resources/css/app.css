@@ -1,0 +1,83 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../vendor/livewire/livewire/dist/livewire.js';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-heading: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+
+    --color-cream: #fff8f9;
+    --color-ink: #450920;
+    --color-muted: #a29c9d;
+    --color-brand: #e28498;
+    --color-brand-hover: #d99696;
+    --color-brand-light: #da627d;
+    --color-mauve: #c8839e;
+    --color-mauve-dark: #995972;
+    --color-card: #ffffff;
+}
+
+@layer base {
+    body {
+        @apply bg-cream font-sans text-ink antialiased;
+    }
+
+    h1,
+    h2,
+    h3 {
+        font-family: var(--font-heading);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+    }
+}
+
+@layer components {
+    .font-script {
+        @apply font-sans text-xs font-semibold uppercase tracking-[0.14em];
+    }
+
+    .app-card {
+        @apply rounded-[1.25rem] border border-brand/10 bg-card p-5 shadow-[0_10px_40px_rgba(69,9,32,0.06)];
+    }
+
+    .btn-primary {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40;
+    }
+
+    .btn-secondary {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl border border-brand/20 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-brand/40 hover:bg-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30;
+    }
+
+    .btn-ghost {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-mauve-dark transition hover:bg-brand/10 focus:outline-none;
+    }
+
+    .field-label {
+        @apply mb-1.5 block text-sm font-medium text-ink/80;
+    }
+
+    .field-input,
+    .field-textarea {
+        @apply w-full rounded-xl border border-brand/15 bg-white px-3.5 py-2.5 text-sm text-ink shadow-sm outline-none transition placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/20;
+    }
+
+    .field-textarea {
+        @apply min-h-28 resize-y;
+    }
+
+    .chip {
+        @apply inline-flex items-center rounded-full bg-brand/15 px-3 py-1 text-xs font-medium text-mauve-dark;
+    }
+
+    .nav-link {
+        @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink/70 transition hover:bg-brand/10 hover:text-ink;
+    }
+
+    .nav-link-active {
+        @apply bg-brand text-white hover:bg-brand hover:text-white;
+    }
+}
