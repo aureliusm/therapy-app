@@ -121,7 +121,11 @@ new #[Layout('layouts::app')] class extends Component
                     <span class="text-sm font-medium" x-text="recording ? 'Ustavi' : 'Snemaj'"></span>
                 </button>
 
-                <p class="text-sm text-muted" x-text="statusText"></p>
+                <div x-show="recording" class="h-1.5 w-40 overflow-hidden rounded-full bg-brand/10">
+                    <div class="h-full rounded-full bg-brand transition-[width] duration-150" :style="`width: ${Math.min(100, level * 400)}%`"></div>
+                </div>
+
+                <p class="text-sm" :class="hasMicrophoneProblem ? 'max-w-md text-brand-light' : 'text-muted'" x-text="statusText"></p>
 
                 <template x-if="previewUrl">
                     <audio controls class="w-full max-w-md" :src="previewUrl"></audio>
@@ -171,6 +175,9 @@ Alpine.data('dictationUploader', () => ({
     chunks: [],
     previewUrl: null,
     statusText: 'Pripravljeno za narek',
+    level: 0,
+    peakLevel: 0,
+    hasMicrophoneProblem: false,
 
     async toggle() {
         if (this.recording) {
@@ -180,29 +187,60 @@ Alpine.data('dictationUploader', () => ({
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const stopMeter = this.startLevelMeter(stream);
             this.chunks = [];
+            this.hasMicrophoneProblem = false;
             this.mediaRecorder = new MediaRecorder(stream);
             this.mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) this.chunks.push(event.data);
             };
             this.mediaRecorder.onstop = () => {
+                stopMeter();
                 stream.getTracks().forEach((track) => track.stop());
                 const blob = new Blob(this.chunks, { type: this.mediaRecorder.mimeType || 'audio/webm' });
+                if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
                 this.previewUrl = URL.createObjectURL(blob);
                 const file = new File([blob], 'narek-' + Date.now() + '.webm', { type: blob.type });
                 const transfer = new DataTransfer();
                 transfer.items.add(file);
                 this.$refs.fileInput.files = transfer.files;
                 this.$refs.fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-                this.statusText = 'Posnetek pripravljen';
+                // macOS aplikaciji brez dovoljenja za mikrofon ne zavrne snemanja, ampak vrača tišino.
+                this.hasMicrophoneProblem = this.peakLevel < 0.01;
+                this.statusText = this.hasMicrophoneProblem
+                    ? 'Posnetek je tih – mikrofon ne zajema zvoka. Dovoli dostop v Sistemskih nastavitvah → Zasebnost in varnost → Mikrofon, nato aplikacijo znova zaženi.'
+                    : 'Posnetek pripravljen';
                 this.recording = false;
             };
             this.mediaRecorder.start();
             this.recording = true;
             this.statusText = 'Snemam … klikni za ustavitev';
         } catch (error) {
-            this.statusText = 'Mikrofon ni na voljo';
+            this.hasMicrophoneProblem = true;
+            this.statusText = 'Mikrofon ni na voljo. Dovoli dostop v Sistemskih nastavitvah → Zasebnost in varnost → Mikrofon, nato aplikacijo znova zaženi.';
         }
+    },
+
+    startLevelMeter(stream) {
+        const context = new AudioContext();
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 1024;
+        context.createMediaStreamSource(stream).connect(analyser);
+        const samples = new Float32Array(analyser.fftSize);
+        this.level = 0;
+        this.peakLevel = 0;
+
+        const interval = setInterval(() => {
+            analyser.getFloatTimeDomainData(samples);
+            this.level = Math.sqrt(samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length);
+            this.peakLevel = Math.max(this.peakLevel, this.level);
+        }, 150);
+
+        return () => {
+            clearInterval(interval);
+            context.close();
+            this.level = 0;
+        };
     },
 }));
 </script>

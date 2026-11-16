@@ -207,6 +207,7 @@ return [
      * Define your own scripts to run before and after the build process.
      */
     'prebuild' => [
+        'php artisan app:install-electron-plugins',
         'npm run build',
     ],
 

@@ -47,14 +47,14 @@ new #[Layout('layouts::app')] class extends Component
         </div>
     @else
         <div class="relative space-y-0 pl-2">
-            <div class="absolute bottom-4 left-[1.15rem] top-4 w-px bg-brand/25"></div>
+            <div class="absolute bottom-4 left-6 top-4 w-px -translate-x-1/2 bg-brand/25"></div>
 
             @foreach ($client->sessions as $session)
                 <a href="{{ route('sessions.show', [$client, $session]) }}"
                    wire:key="session-{{ $session->id }}"
                    class="relative mb-5 flex gap-4 rounded-[1.25rem] p-1 transition hover:bg-white/60"
                    wire:navigate>
-                    <div class="relative z-10 mt-6 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-brand bg-cream">
+                    <div class="relative z-10 mt-5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-brand bg-cream">
                         <span class="h-2 w-2 rounded-full bg-brand"></span>
                     </div>
 
