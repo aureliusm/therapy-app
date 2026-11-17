@@ -206,7 +206,7 @@ Alpine.data('dictationUploader', () => ({
                 this.$refs.fileInput.files = transfer.files;
                 this.$refs.fileInput.dispatchEvent(new Event('change', { bubbles: true }));
                 // macOS aplikaciji brez dovoljenja za mikrofon ne zavrne snemanja, ampak vrača tišino.
-                this.hasMicrophoneProblem = this.peakLevel < 0.01;
+                this.hasMicrophoneProblem = this.peakLevel < 0.0005;
                 this.statusText = this.hasMicrophoneProblem
                     ? 'Posnetek je tih – mikrofon ne zajema zvoka. Dovoli dostop v Sistemskih nastavitvah → Zasebnost in varnost → Mikrofon, nato aplikacijo znova zaženi.'
                     : 'Posnetek pripravljen';
