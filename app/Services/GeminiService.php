@@ -75,7 +75,8 @@ class GeminiService
      *     insight_details: array{
      *         interventions: list<array{title: string, explanation: string, example: string}>,
      *         warnings: list<array{title: string, explanation: string, example: string}>,
-     *         next_ideas: list<array{title: string, explanation: string, example: string}>
+     *         next_ideas: list<array{title: string, explanation: string, example: string}>,
+     *         other_approaches: list<array{title: string, explanation: string, example: string}>
      *     },
      *     other_approaches: string
      * }
@@ -89,11 +90,13 @@ class GeminiService
             ."Intervence in predloge prilagodi tej vrsti terapije.\n\n"
             ."Vrni JSON s ključi:\n"
             ."- summary: povzetek, približno pol strani A4,\n"
-            ."- interventions: seznam uporabljenih intervenc. Za vsako vrni title (kratko ime alineje), explanation (daljša razlaga v nekaj stavkih: kaj pomeni in zakaj je bila na mestu) in example (konkreten primer uporabe v tej vrsti terapije),\n"
-            ."- warnings: seznam opažanj in opozoril. Za vsako vrni title, explanation in example (kako to upoštevati pri nadaljnjem delu),\n"
+            ."- interventions: seznam uporabljenih intervenc. Za vsako vrni title (kratko ime alineje), explanation in example,\n"
+            ."- warnings: seznam opažanj in opozoril. Za vsako vrni title, explanation in example,\n"
             ."- next_ideas: seznam idej za naslednje srečanje. Za vsako vrni title, explanation in example,\n"
             ."- other_approaches: po eno konkretno priporočilo za delo s klientom iz vsake od teh psihoterapevtskih smeri: {$otherApproaches}. "
-            ."Za vsako smer vrni approach (ime smeri, kot je navedeno) in recommendation (priporočilo v enem do dveh stavkih).\n\n"
+            ."Za vsako smer vrni approach (ime smeri, kot je navedeno), recommendation (kratko priporočilo v enem stavku), explanation in example.\n"
+            ."explanation je daljša razlaga v 4 do 6 stavkih. Povej, kaj pomeni pri tem klientu, zakaj je na mestu in kaj terapevtka z njo doseže. Piši toplo, jasno in konkretno, brez splošnih učbeniških fraz.\n"
+            ."example je konkreten primer iz tega srečanja: dobesedni stavek, ki bi ga terapevtka lahko rekla, ali natančen potek vaje v nekaj korakih.\n\n"
             .($previousContext ? "Kratek kontekst prejšnjih srečanj:\n{$previousContext}\n\n" : '')
             ."Zapisek / transkript srečanja:\n{$transcript}";
 
@@ -129,8 +132,10 @@ class GeminiService
                                 'properties' => [
                                     'approach' => ['type' => 'STRING'],
                                     'recommendation' => ['type' => 'STRING'],
+                                    'explanation' => ['type' => 'STRING'],
+                                    'example' => ['type' => 'STRING'],
                                 ],
-                                'required' => ['approach', 'recommendation'],
+                                'required' => ['approach', 'recommendation', 'explanation', 'example'],
                             ],
                         ],
                     ],
@@ -143,6 +148,7 @@ class GeminiService
         $interventions = $this->insightItems($json['interventions'] ?? []);
         $warnings = $this->insightItems($json['warnings'] ?? []);
         $nextIdeas = $this->insightItems($json['next_ideas'] ?? []);
+        $approachInsights = $this->approachInsights($json['other_approaches'] ?? []);
 
         return [
             'summary' => $this->stringValue($json['summary'] ?? ''),
@@ -153,8 +159,9 @@ class GeminiService
                 'interventions' => $interventions['items'],
                 'warnings' => $warnings['items'],
                 'next_ideas' => $nextIdeas['items'],
+                'other_approaches' => $approachInsights['items'],
             ],
-            'other_approaches' => $this->approachRecommendationsText($json['other_approaches'] ?? []),
+            'other_approaches' => $approachInsights['text'],
         ];
     }
 
@@ -172,20 +179,54 @@ class GeminiService
     }
 
     /**
-     * Priporočila shrani kot alineje "- Smer: priporočilo".
+     * @return array{text: string, items: list<array{title: string, explanation: string, example: string}>}
      */
-    protected function approachRecommendationsText(mixed $value): string
+    protected function approachInsights(mixed $value): array
     {
-        if (! is_array($value)) {
-            return $this->bulletText($value);
+        if (is_string($value)) {
+            $value = preg_split('/\r\n|\r|\n/', $value) ?: [];
         }
 
-        return $this->bulletText(array_map(
-            fn (mixed $item): string => is_array($item)
-                ? trim($this->stringValue($item['approach'] ?? '').': '.$this->stringValue($item['recommendation'] ?? ''), ': ')
-                : $this->stringValue($item),
-            $value,
-        ));
+        if (! is_array($value)) {
+            return ['text' => '', 'items' => []];
+        }
+
+        $items = [];
+
+        foreach ($value as $item) {
+            if (is_array($item) && (array_key_exists('approach', $item) || array_key_exists('recommendation', $item))) {
+                $approach = $this->insightTitle($item['approach'] ?? '');
+                $recommendation = $this->stringValue($item['recommendation'] ?? '');
+                $title = trim($approach.($recommendation !== '' ? ': '.$recommendation : ''), ': ');
+                $explanation = $this->stringValue($item['explanation'] ?? '');
+                $example = $this->stringValue($item['example'] ?? '');
+            } elseif (is_array($item)) {
+                $title = $this->insightTitle($item['title'] ?? '');
+                $explanation = $this->stringValue($item['explanation'] ?? '');
+                $example = $this->stringValue($item['example'] ?? '');
+            } elseif (is_scalar($item)) {
+                $title = $this->insightTitle($item);
+                $explanation = '';
+                $example = '';
+            } else {
+                continue;
+            }
+
+            if ($title === '') {
+                continue;
+            }
+
+            $items[] = [
+                'title' => $title,
+                'explanation' => $explanation,
+                'example' => $example,
+            ];
+        }
+
+        return [
+            'text' => $this->bulletText(array_column($items, 'title')),
+            'items' => $items,
+        ];
     }
 
     /**

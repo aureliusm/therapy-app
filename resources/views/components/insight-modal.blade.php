@@ -31,13 +31,13 @@
                     <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink/85" x-text="insight?.explanation"></p>
                 </div>
                 <div x-show="insight?.example">
-                    <p class="font-script text-brand">primer uporabe</p>
+                    <p class="font-script text-brand">konkreten primer</p>
                     <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink/85" x-text="insight?.example"></p>
                 </div>
             </div>
 
             <p class="mt-5 text-sm leading-6 text-muted" x-show="insight && !insight.explanation && !insight.example">
-                Daljša razlaga in primer uporabe bosta na voljo po ponovni obdelavi z AI.
+                Daljša razlaga in konkreten primer bosta na voljo po ponovni obdelavi z AI.
             </p>
         </div>
     </div>

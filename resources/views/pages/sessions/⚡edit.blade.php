@@ -96,6 +96,7 @@ new #[Layout('layouts::app')] class extends Component
                 'interventions' => TherapySession::alignInsights($validated['interventions'] ?? null, $existingDetails['interventions'] ?? []),
                 'warnings' => TherapySession::alignInsights($validated['warnings'] ?? null, $existingDetails['warnings'] ?? []),
                 'next_ideas' => TherapySession::alignInsights($validated['next_ideas'] ?? null, $existingDetails['next_ideas'] ?? []),
+                'other_approaches' => TherapySession::alignInsights($validated['other_approaches'] ?? null, $existingDetails['other_approaches'] ?? []),
             ],
             'other_approaches' => $validated['other_approaches'] ?: null,
         ]);

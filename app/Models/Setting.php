@@ -31,7 +31,7 @@ class Setting extends Model
             'base_prompt' => static::defaultBasePrompt(),
         ]);
 
-        if ($settings->base_prompt === static::legacyBasePrompt()) {
+        if (in_array($settings->base_prompt, [static::legacyBasePrompt(), static::previousDefaultBasePrompt()], true)) {
             $settings->update(['base_prompt' => static::defaultBasePrompt()]);
         }
 
@@ -39,6 +39,20 @@ class Setting extends Model
     }
 
     public static function defaultBasePrompt(): string
+    {
+        return "Si izkušena psihoterapevtka. Piši v slovenščini, toplo, jasno in strokovno.\n"
+            ."Na podlagi zapiska srečanja pripravi:\n"
+            ."- povzetek (približno pol strani A4),\n"
+            ."- uporabljene intervence glede na vrsto terapije,\n"
+            ."- opažanja in opozorila (na kaj biti pozorna),\n"
+            ."- ideje in intervence za naslednje srečanje.\n"
+            .'Ne izmišljuj dejstev, ki niso v zapisku. Za vsako intervenco, opažanje, idejo in priporočilo druge smeri pripravi kratko ime, daljšo razlago v več stavkih in konkreten primer: dobesedni stavek ali natančen potek vaje.';
+    }
+
+    /**
+     * Poziv brez tem, ki je razlago in primer še prosil prekratko.
+     */
+    public static function previousDefaultBasePrompt(): string
     {
         return "Si izkušena psihoterapevtka. Piši v slovenščini, toplo, jasno in strokovno.\n"
             ."Na podlagi zapiska srečanja pripravi:\n"

@@ -113,7 +113,7 @@ new #[Layout('layouts::app')] class extends Component
 
         <section class="app-card space-y-3">
             <p class="font-script text-brand">priporočila drugih smeri</p>
-            <x-bullet-list :text="$session->other_approaches" />
+            <x-insight-list :items="$session->insights('other_approaches')" />
         </section>
 
         @if ($session->hasAudio())

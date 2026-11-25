@@ -24,6 +24,13 @@ class SessionShowPageTest extends TestCase
                 'interventions' => [
                     ['title' => 'Validacija', 'explanation' => 'Potrditev doživljanja.', 'example' => 'Slišim, kako težko ti je.'],
                 ],
+                'other_approaches' => [
+                    [
+                        'title' => 'Geštalt terapija: Delo s praznim stolom.',
+                        'explanation' => 'Prazni stol odpre pogovor, ki je ostal nedokončan.',
+                        'example' => 'Postavi stol predse in povej, kaj ti je ostalo na jeziku.',
+                    ],
+                ],
             ],
         ]);
 
@@ -34,7 +41,9 @@ class SessionShowPageTest extends TestCase
         $response->assertSee('data-insight-title="Validacija"', false);
         $response->assertSee('Potrditev doživljanja.');
         $response->assertSee('Slišim, kako težko ti je.');
-        $response->assertSee('Geštalt terapija: Delo s praznim stolom.');
+        $response->assertSee('data-insight-title="Geštalt terapija: Delo s praznim stolom."', false);
+        $response->assertSee('Prazni stol odpre pogovor, ki je ostal nedokončan.');
+        $response->assertSee('Postavi stol predse in povej, kaj ti je ostalo na jeziku.');
         $response->assertDontSee('skrita-tema-ki-ne-sme-biti-vidna');
         $response->assertDontSee('ključne teme');
     }

@@ -60,6 +60,7 @@ class ProcessTherapySessionTest extends TestCase
             'next_ideas' => [
                 ['title' => 'Raziskati odnos s šefom', 'explanation' => 'Odnos ostaja odprt.', 'example' => 'Vprašaj, kaj bi šefu povedal.'],
             ],
+            'other_approaches' => [],
         ], $session->insight_details);
         Http::assertSent(function (Request $request): bool {
             $prompt = (string) data_get($request->data(), 'contents.0.parts.0.text');
@@ -67,8 +68,8 @@ class ProcessTherapySessionTest extends TestCase
 
             return ! str_contains($prompt, 'topics')
                 && ! str_contains($prompt, 'ključnih tem')
-                && str_contains($prompt, 'explanation')
-                && str_contains($prompt, 'example')
+                && str_contains($prompt, 'daljša razlaga v 4 do 6 stavkih')
+                && str_contains($prompt, 'dobesedni stavek')
                 && $required === ['summary', 'interventions', 'warnings', 'next_ideas', 'other_approaches'];
         });
     }
@@ -104,8 +105,18 @@ class ProcessTherapySessionTest extends TestCase
             self::GEMINI_URL => Http::response($this->geminiText(json_encode([
                 'summary' => 'Povzetek', 'interventions' => [], 'warnings' => [], 'next_ideas' => [],
                 'other_approaches' => [
-                    ['approach' => 'Geštalt terapija', 'recommendation' => 'Delo s praznim stolom.'],
-                    ['approach' => 'Telesna terapija', 'recommendation' => 'Opazovanje dihanja.'],
+                    [
+                        'approach' => 'Geštalt terapija',
+                        'recommendation' => 'Delo s praznim stolom.',
+                        'explanation' => 'Prazni stol odpre pogovor, ki je na srečanju ostal nedokončan.',
+                        'example' => 'Postavi stol predse in povej šefu, kaj ti je ostalo na jeziku.',
+                    ],
+                    [
+                        'approach' => 'Telesna terapija',
+                        'recommendation' => 'Opazovanje dihanja.',
+                        'explanation' => 'Dihanje pokaže, kje se napetost zadrži, ko govori o službi.',
+                        'example' => 'Trikrat izdihni in povej, kje v telesu začutiš šefa.',
+                    ],
                 ],
             ]))),
         ]);
@@ -113,10 +124,23 @@ class ProcessTherapySessionTest extends TestCase
 
         (new ProcessTherapySession($session->id))->handle(app(GeminiService::class));
 
+        $session->refresh();
         $this->assertSame(
             "- Geštalt terapija: Delo s praznim stolom.\n- Telesna terapija: Opazovanje dihanja.",
-            $session->refresh()->other_approaches,
+            $session->other_approaches,
         );
+        $this->assertSame([
+            [
+                'title' => 'Geštalt terapija: Delo s praznim stolom.',
+                'explanation' => 'Prazni stol odpre pogovor, ki je na srečanju ostal nedokončan.',
+                'example' => 'Postavi stol predse in povej šefu, kaj ti je ostalo na jeziku.',
+            ],
+            [
+                'title' => 'Telesna terapija: Opazovanje dihanja.',
+                'explanation' => 'Dihanje pokaže, kje se napetost zadrži, ko govori o službi.',
+                'example' => 'Trikrat izdihni in povej, kje v telesu začutiš šefa.',
+            ],
+        ], $session->insight_details['other_approaches']);
         Http::assertSent(function (Request $request): bool {
             $prompt = data_get($request->data(), 'contents.0.parts.0.text');
             $approachesLine = str($prompt)->after('- other_approaches:')->before("\n")->toString();

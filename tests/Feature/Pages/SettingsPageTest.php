@@ -79,7 +79,21 @@ class SettingsPageTest extends TestCase
         $component = Livewire::test('pages::settings');
 
         $this->assertStringNotContainsString('ključne teme', $component->get('base_prompt'));
-        $this->assertStringContainsString('konkreten primer uporabe', $component->get('base_prompt'));
+        $this->assertStringContainsString('daljšo razlago v več stavkih', $component->get('base_prompt'));
+        $this->assertStringContainsString('dobesedni stavek', $component->get('base_prompt'));
+    }
+
+    public function test_opening_settings_replaces_the_shorter_default_prompt(): void
+    {
+        Setting::query()->create([
+            'default_therapy_type' => 'Transakcijska analiza (TA)',
+            'base_prompt' => Setting::previousDefaultBasePrompt(),
+        ]);
+
+        $component = Livewire::test('pages::settings');
+
+        $this->assertStringContainsString('daljšo razlago v več stavkih', $component->get('base_prompt'));
+        $this->assertStringContainsString('priporočilo druge smeri', $component->get('base_prompt'));
     }
 
     public function test_opening_settings_keeps_a_custom_prompt(): void
