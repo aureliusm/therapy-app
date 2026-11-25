@@ -81,10 +81,11 @@ class ProcessTherapySession implements ShouldQueue
 
             $session->update([
                 'summary' => $result['summary'],
-                'topics' => $result['topics'],
+                'topics' => null,
                 'interventions' => $result['interventions'],
                 'warnings' => $result['warnings'],
                 'next_ideas' => $result['next_ideas'],
+                'insight_details' => $result['insight_details'],
                 'other_approaches' => $result['other_approaches'],
                 'status' => 'ready',
                 'error_message' => null,

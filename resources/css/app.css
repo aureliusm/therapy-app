@@ -22,6 +22,10 @@
 }
 
 @layer base {
+    [x-cloak] {
+        display: none !important;
+    }
+
     body {
         @apply bg-cream font-sans text-ink antialiased;
     }
@@ -79,5 +83,17 @@
 
     .nav-link-active {
         @apply bg-brand text-white hover:bg-brand hover:text-white;
+    }
+
+    .insight-overlay {
+        @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    }
+
+    .insight-backdrop {
+        @apply absolute inset-0 bg-ink/40;
+    }
+
+    .insight-panel {
+        @apply relative max-h-[min(36rem,calc(100vh-2rem))] w-full max-w-lg overflow-y-auto;
     }
 }

@@ -69,10 +69,14 @@ class GeminiService
     /**
      * @return array{
      *     summary: string,
-     *     topics: list<string>,
      *     interventions: string,
      *     warnings: string,
      *     next_ideas: string,
+     *     insight_details: array{
+     *         interventions: list<array{title: string, explanation: string, example: string}>,
+     *         warnings: list<array{title: string, explanation: string, example: string}>,
+     *         next_ideas: list<array{title: string, explanation: string, example: string}>
+     *     },
      *     other_approaches: string
      * }
      */
@@ -85,16 +89,26 @@ class GeminiService
             ."Intervence in predloge prilagodi tej vrsti terapije.\n\n"
             ."Vrni JSON s ključi:\n"
             ."- summary: povzetek, približno pol strani A4,\n"
-            ."- topics: seznam ključnih tem (kratke fraze),\n"
-            ."- interventions: seznam uporabljenih intervenc,\n"
-            ."- warnings: seznam opažanj in opozoril,\n"
-            ."- next_ideas: seznam idej in intervenc za naslednje srečanje,\n"
+            ."- interventions: seznam uporabljenih intervenc. Za vsako vrni title (kratko ime alineje), explanation (daljša razlaga v nekaj stavkih: kaj pomeni in zakaj je bila na mestu) in example (konkreten primer uporabe v tej vrsti terapije),\n"
+            ."- warnings: seznam opažanj in opozoril. Za vsako vrni title, explanation in example (kako to upoštevati pri nadaljnjem delu),\n"
+            ."- next_ideas: seznam idej za naslednje srečanje. Za vsako vrni title, explanation in example,\n"
             ."- other_approaches: po eno konkretno priporočilo za delo s klientom iz vsake od teh psihoterapevtskih smeri: {$otherApproaches}. "
             ."Za vsako smer vrni approach (ime smeri, kot je navedeno) in recommendation (priporočilo v enem do dveh stavkih).\n\n"
             .($previousContext ? "Kratek kontekst prejšnjih srečanj:\n{$previousContext}\n\n" : '')
             ."Zapisek / transkript srečanja:\n{$transcript}";
 
-        $stringList = ['type' => 'ARRAY', 'items' => ['type' => 'STRING']];
+        $insightList = [
+            'type' => 'ARRAY',
+            'items' => [
+                'type' => 'OBJECT',
+                'properties' => [
+                    'title' => ['type' => 'STRING'],
+                    'explanation' => ['type' => 'STRING'],
+                    'example' => ['type' => 'STRING'],
+                ],
+                'required' => ['title', 'explanation', 'example'],
+            ],
+        ];
 
         $text = $this->generate(
             config('therapy.gemini.summary_model'),
@@ -105,10 +119,9 @@ class GeminiService
                     'type' => 'OBJECT',
                     'properties' => [
                         'summary' => ['type' => 'STRING'],
-                        'topics' => $stringList,
-                        'interventions' => $stringList,
-                        'warnings' => $stringList,
-                        'next_ideas' => $stringList,
+                        'interventions' => $insightList,
+                        'warnings' => $insightList,
+                        'next_ideas' => $insightList,
                         'other_approaches' => [
                             'type' => 'ARRAY',
                             'items' => [
@@ -121,19 +134,26 @@ class GeminiService
                             ],
                         ],
                     ],
-                    'required' => ['summary', 'topics', 'interventions', 'warnings', 'next_ideas', 'other_approaches'],
+                    'required' => ['summary', 'interventions', 'warnings', 'next_ideas', 'other_approaches'],
                 ],
             ],
         );
 
         $json = $this->extractJson($text);
+        $interventions = $this->insightItems($json['interventions'] ?? []);
+        $warnings = $this->insightItems($json['warnings'] ?? []);
+        $nextIdeas = $this->insightItems($json['next_ideas'] ?? []);
 
         return [
             'summary' => $this->stringValue($json['summary'] ?? ''),
-            'topics' => $this->listValue($json['topics'] ?? []),
-            'interventions' => $this->bulletText($json['interventions'] ?? ''),
-            'warnings' => $this->bulletText($json['warnings'] ?? ''),
-            'next_ideas' => $this->bulletText($json['next_ideas'] ?? ''),
+            'interventions' => $interventions['text'],
+            'warnings' => $warnings['text'],
+            'next_ideas' => $nextIdeas['text'],
+            'insight_details' => [
+                'interventions' => $interventions['items'],
+                'warnings' => $warnings['items'],
+                'next_ideas' => $nextIdeas['items'],
+            ],
             'other_approaches' => $this->approachRecommendationsText($json['other_approaches'] ?? []),
         ];
     }
@@ -166,6 +186,57 @@ class GeminiService
                 : $this->stringValue($item),
             $value,
         ));
+    }
+
+    /**
+     * @return array{text: string, items: list<array{title: string, explanation: string, example: string}>}
+     */
+    protected function insightItems(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = preg_split('/\r\n|\r|\n/', $value) ?: [];
+        }
+
+        $items = [];
+
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                if (is_array($item)) {
+                    $title = $this->insightTitle($item['title'] ?? '');
+                    $explanation = $this->stringValue($item['explanation'] ?? '');
+                    $example = $this->stringValue($item['example'] ?? '');
+                } elseif (is_scalar($item)) {
+                    $title = $this->insightTitle($item);
+                    $explanation = '';
+                    $example = '';
+                } else {
+                    continue;
+                }
+
+                if ($title === '') {
+                    continue;
+                }
+
+                $items[] = [
+                    'title' => $title,
+                    'explanation' => $explanation,
+                    'example' => $example,
+                ];
+            }
+        }
+
+        return [
+            'text' => $this->bulletText(array_column($items, 'title')),
+            'items' => $items,
+        ];
+    }
+
+    protected function insightTitle(mixed $value): string
+    {
+        $title = $this->stringValue($value);
+        $title = preg_replace('/^([-*•–—]|\d+[.)])\s+/u', '', $title) ?? $title;
+
+        return trim($title);
     }
 
     protected function stringValue(mixed $value): string

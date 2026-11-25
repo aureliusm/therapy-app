@@ -47,6 +47,8 @@
         </div>
     @endif
 
+    <x-insight-modal />
+
     @livewireScripts
 </body>
 </html>

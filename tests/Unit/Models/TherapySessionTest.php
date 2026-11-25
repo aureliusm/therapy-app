@@ -30,4 +30,26 @@ class TherapySessionTest extends TestCase
     {
         $this->assertSame($expected, TherapySession::bulletItems($text));
     }
+
+    public function test_align_insights_keeps_explanation_when_title_stays(): void
+    {
+        $aligned = TherapySession::alignInsights("- Validacija\n- Nova", [
+            ['title' => 'Validacija', 'explanation' => 'Razlaga', 'example' => 'Primer'],
+            ['title' => 'Stara', 'explanation' => 'Gre stran', 'example' => 'Star primer'],
+        ]);
+
+        $this->assertSame([
+            ['title' => 'Validacija', 'explanation' => 'Razlaga', 'example' => 'Primer'],
+            ['title' => 'Nova', 'explanation' => '', 'example' => ''],
+        ], $aligned);
+    }
+
+    public function test_align_insights_drops_details_when_text_is_empty(): void
+    {
+        $aligned = TherapySession::alignInsights(null, [
+            ['title' => 'Validacija', 'explanation' => 'Razlaga', 'example' => 'Primer'],
+        ]);
+
+        $this->assertSame([], $aligned);
+    }
 }

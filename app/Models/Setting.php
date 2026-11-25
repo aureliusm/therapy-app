@@ -26,17 +26,42 @@ class Setting extends Model
 
     public static function current(): self
     {
-        return static::query()->firstOrCreate([], [
+        $settings = static::query()->firstOrCreate([], [
             'default_therapy_type' => 'Transakcijska analiza (TA)',
-            'base_prompt' => "Si izkušena psihoterapevtka. Piši v slovenščini, toplo, jasno in strokovno.\n"
-                ."Na podlagi zapiska srečanja pripravi:\n"
-                ."- povzetek (približno pol strani A4),\n"
-                ."- ključne teme,\n"
-                ."- uporabljene intervence glede na vrsto terapije,\n"
-                ."- opažanja in opozorila (na kaj biti pozorna),\n"
-                ."- ideje in intervence za naslednje srečanje.\n"
-                .'Ne izmišljuj dejstev, ki niso v zapisku.',
+            'base_prompt' => static::defaultBasePrompt(),
         ]);
+
+        if ($settings->base_prompt === static::legacyBasePrompt()) {
+            $settings->update(['base_prompt' => static::defaultBasePrompt()]);
+        }
+
+        return $settings;
+    }
+
+    public static function defaultBasePrompt(): string
+    {
+        return "Si izkušena psihoterapevtka. Piši v slovenščini, toplo, jasno in strokovno.\n"
+            ."Na podlagi zapiska srečanja pripravi:\n"
+            ."- povzetek (približno pol strani A4),\n"
+            ."- uporabljene intervence glede na vrsto terapije,\n"
+            ."- opažanja in opozorila (na kaj biti pozorna),\n"
+            ."- ideje in intervence za naslednje srečanje.\n"
+            .'Ne izmišljuj dejstev, ki niso v zapisku. Za vsako intervenco, opažanje in idejo pripravi kratko ime, daljšo razlago in konkreten primer uporabe.';
+    }
+
+    /**
+     * Prejšnji privzeti poziv, ki je še prosil za ključne teme.
+     */
+    public static function legacyBasePrompt(): string
+    {
+        return "Si izkušena psihoterapevtka. Piši v slovenščini, toplo, jasno in strokovno.\n"
+            ."Na podlagi zapiska srečanja pripravi:\n"
+            ."- povzetek (približno pol strani A4),\n"
+            ."- ključne teme,\n"
+            ."- uporabljene intervence glede na vrsto terapije,\n"
+            ."- opažanja in opozorila (na kaj biti pozorna),\n"
+            ."- ideje in intervence za naslednje srečanje.\n"
+            .'Ne izmišljuj dejstev, ki niso v zapisku.';
     }
 
     /**

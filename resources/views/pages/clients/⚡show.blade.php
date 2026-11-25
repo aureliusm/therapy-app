@@ -77,16 +77,10 @@ new #[Layout('layouts::app')] class extends Component
                             </span>
                         </div>
 
-                        <p class="text-sm leading-relaxed text-ink/85">
-                            {{ $session->summary ? \Illuminate\Support\Str::limit(strip_tags($session->summary), 180) : ($session->transcript ? \Illuminate\Support\Str::limit($session->transcript, 180) : 'Brez povzetka zaenkrat.') }}
-                        </p>
-
-                        @if (! empty($session->topics))
-                            <div class="flex flex-wrap gap-2">
-                                @foreach ($session->topics as $topic)
-                                    <span class="chip">{{ $topic }}</span>
-                                @endforeach
-                            </div>
+                        @if (filled($session->summary))
+                            <div class="whitespace-pre-wrap text-sm leading-relaxed text-ink/85">{{ $session->summary }}</div>
+                        @else
+                            <p class="text-sm text-muted">Brez povzetka zaenkrat.</p>
                         @endif
                     </article>
                 </a>

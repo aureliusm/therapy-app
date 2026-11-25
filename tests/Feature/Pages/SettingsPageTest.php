@@ -61,4 +61,36 @@ class SettingsPageTest extends TestCase
 
         Queue::assertPushed(DownloadAppUpdate::class, fn (DownloadAppUpdate $job): bool => $job->latest['version'] === '1.0.6');
     }
+
+    public function test_opening_settings_replaces_the_legacy_prompt_that_asks_for_themes(): void
+    {
+        Setting::query()->create([
+            'default_therapy_type' => 'Transakcijska analiza (TA)',
+            'base_prompt' => "Si izkušena psihoterapevtka. Piši v slovenščini, toplo, jasno in strokovno.\n"
+                ."Na podlagi zapiska srečanja pripravi:\n"
+                ."- povzetek (približno pol strani A4),\n"
+                ."- ključne teme,\n"
+                ."- uporabljene intervence glede na vrsto terapije,\n"
+                ."- opažanja in opozorila (na kaj biti pozorna),\n"
+                ."- ideje in intervence za naslednje srečanje.\n"
+                .'Ne izmišljuj dejstev, ki niso v zapisku.',
+        ]);
+
+        $component = Livewire::test('pages::settings');
+
+        $this->assertStringNotContainsString('ključne teme', $component->get('base_prompt'));
+        $this->assertStringContainsString('konkreten primer uporabe', $component->get('base_prompt'));
+    }
+
+    public function test_opening_settings_keeps_a_custom_prompt(): void
+    {
+        Setting::query()->create([
+            'default_therapy_type' => 'Integrativna',
+            'base_prompt' => 'Moj prompt naj omenja ključne teme.',
+        ]);
+
+        $component = Livewire::test('pages::settings');
+
+        $this->assertSame('Moj prompt naj omenja ključne teme.', $component->get('base_prompt'));
+    }
 }

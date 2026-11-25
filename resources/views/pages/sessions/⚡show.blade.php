@@ -95,31 +95,20 @@ new #[Layout('layouts::app')] class extends Component
             <div class="whitespace-pre-wrap text-[15px] leading-7 text-ink/90">{{ $session->summary ?: 'Povzetek še ni na voljo.' }}</div>
         </section>
 
-        @if (! empty($session->topics))
-            <section class="app-card space-y-3">
-                <p class="font-script text-brand">ključne teme</p>
-                <div class="flex flex-wrap gap-2">
-                    @foreach ($session->topics as $topic)
-                        <span class="chip">{{ $topic }}</span>
-                    @endforeach
-                </div>
-            </section>
-        @endif
-
         <div class="grid gap-5 lg:grid-cols-2">
             <section class="app-card space-y-3">
-                <p class="font-script text-brand">intervence</p>
-                <x-bullet-list :text="$session->interventions" />
+                <p class="font-script text-brand">uporabljene intervence</p>
+                <x-insight-list :items="$session->insights('interventions')" />
             </section>
             <section class="app-card space-y-3">
                 <p class="font-script text-brand">opozorila in opažanja</p>
-                <x-bullet-list :text="$session->warnings" />
+                <x-insight-list :items="$session->insights('warnings')" />
             </section>
         </div>
 
         <section class="app-card space-y-3">
             <p class="font-script text-brand">za naslednje srečanje</p>
-            <x-bullet-list :text="$session->next_ideas" />
+            <x-insight-list :items="$session->insights('next_ideas')" />
         </section>
 
         <section class="app-card space-y-3">

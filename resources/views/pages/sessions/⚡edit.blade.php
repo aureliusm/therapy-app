@@ -23,8 +23,6 @@ new #[Layout('layouts::app')] class extends Component
 
     public string $summary = '';
 
-    public string $topicsText = '';
-
     public string $interventions = '';
 
     public string $warnings = '';
@@ -49,7 +47,6 @@ new #[Layout('layouts::app')] class extends Component
         $this->therapy_type = $session->therapy_type;
         $this->transcript = (string) $session->transcript;
         $this->summary = (string) $session->summary;
-        $this->topicsText = implode("\n", $session->topics ?? []);
         $this->interventions = (string) $session->interventions;
         $this->warnings = (string) $session->warnings;
         $this->next_ideas = (string) $session->next_ideas;
@@ -63,7 +60,6 @@ new #[Layout('layouts::app')] class extends Component
             'therapy_type' => ['required', 'string', 'max:255'],
             'transcript' => ['nullable', 'string'],
             'summary' => ['nullable', 'string'],
-            'topicsText' => ['nullable', 'string'],
             'interventions' => ['nullable', 'string'],
             'warnings' => ['nullable', 'string'],
             'next_ideas' => ['nullable', 'string'],
@@ -71,11 +67,7 @@ new #[Layout('layouts::app')] class extends Component
             'audio' => ['nullable', 'file', 'max:51200', 'mimetypes:audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/mp3,video/webm'],
         ]);
 
-        $topics = collect(preg_split('/\r\n|\r|\n|\\\\n/', $validated['topicsText'] ?? ''))
-            ->map(fn ($item) => trim($item))
-            ->filter()
-            ->values()
-            ->all();
+        $existingDetails = $this->session->insight_details ?? [];
 
         if ($this->removeAudio) {
             $this->session->deleteAudio();
@@ -96,10 +88,15 @@ new #[Layout('layouts::app')] class extends Component
             'therapy_type' => $validated['therapy_type'],
             'transcript' => $validated['transcript'] ?: null,
             'summary' => $validated['summary'] ?: null,
-            'topics' => $topics,
+            'topics' => null,
             'interventions' => $validated['interventions'] ?: null,
             'warnings' => $validated['warnings'] ?: null,
             'next_ideas' => $validated['next_ideas'] ?: null,
+            'insight_details' => [
+                'interventions' => TherapySession::alignInsights($validated['interventions'] ?? null, $existingDetails['interventions'] ?? []),
+                'warnings' => TherapySession::alignInsights($validated['warnings'] ?? null, $existingDetails['warnings'] ?? []),
+                'next_ideas' => TherapySession::alignInsights($validated['next_ideas'] ?? null, $existingDetails['next_ideas'] ?? []),
+            ],
             'other_approaches' => $validated['other_approaches'] ?: null,
         ]);
 
@@ -154,14 +151,9 @@ new #[Layout('layouts::app')] class extends Component
             <textarea wire:model="summary" class="field-textarea min-h-40"></textarea>
         </section>
 
-        <section class="app-card space-y-3">
-            <p class="font-script text-brand">ključne teme</p>
-            <textarea wire:model="topicsText" class="field-textarea" placeholder="Ena tema v vsako vrstico"></textarea>
-        </section>
-
         <div class="grid gap-5 lg:grid-cols-2">
             <section class="app-card space-y-3">
-                <p class="font-script text-brand">intervence</p>
+                <p class="font-script text-brand">uporabljene intervence</p>
                 <textarea wire:model="interventions" class="field-textarea"></textarea>
             </section>
             <section class="app-card space-y-3">

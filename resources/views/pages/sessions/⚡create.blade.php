@@ -141,7 +141,7 @@ new #[Layout('layouts::app')] class extends Component
             <div>
                 <p class="font-script text-brand">ali z besedilom</p>
                 <label class="field-label mt-2" for="transcript">Zapisek / transkript</label>
-                <textarea id="transcript" wire:model="transcript" class="field-textarea min-h-40" placeholder="Kaj se je zgodilo na srečanju, ključne teme, občutki, intervence …"></textarea>
+                <textarea id="transcript" wire:model="transcript" class="field-textarea min-h-40" placeholder="Kaj se je zgodilo na srečanju, občutki, intervence …"></textarea>
                 @error('transcript') <p class="mt-1 text-sm text-brand-light">{{ $message }}</p> @enderror
             </div>
 

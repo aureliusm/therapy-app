@@ -17,17 +17,72 @@ class ProcessTherapySessionTest extends TestCase
 
     private const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/*';
 
-    public function test_stores_summary_and_list_fields_as_bullets_from_gemini_response(): void
+    public function test_stores_summary_bullets_and_explanations_without_themes(): void
     {
         config(['therapy.gemini.api_key' => 'test-key']);
         Http::preventStrayRequests();
         Http::fake([
             self::GEMINI_URL => Http::response($this->geminiText(json_encode([
                 'summary' => 'Klient je govoril o službi.',
-                'topics' => ['služba', 'meje'],
-                'interventions' => ['Validacija', 'Delo z ego stanji'],
-                'warnings' => ['Utrujenost'],
-                'next_ideas' => ['Raziskati odnos s šefom'],
+                'interventions' => [
+                    ['title' => 'Validacija', 'explanation' => 'Potrditev občutkov klienta.', 'example' => 'Slišim, da te je to prizadelo.'],
+                    ['title' => 'Delo z ego stanji', 'explanation' => 'Raziskava notranjih glasov.', 'example' => 'Kateri del tebe govori zdaj?'],
+                ],
+                'warnings' => [
+                    ['title' => 'Utrujenost', 'explanation' => 'Tempo je bil prehiter.', 'example' => 'Naslednjič preveri spanje.'],
+                ],
+                'next_ideas' => [
+                    ['title' => 'Raziskati odnos s šefom', 'explanation' => 'Odnos ostaja odprt.', 'example' => 'Vprašaj, kaj bi šefu povedal.'],
+                ],
+            ]))),
+        ]);
+        $session = TherapySession::factory()->processing()->create([
+            'topics' => ['služba', 'meje'],
+        ]);
+
+        (new ProcessTherapySession($session->id))->handle(app(GeminiService::class));
+
+        $session->refresh();
+        $this->assertSame('ready', $session->status);
+        $this->assertSame('Klient je govoril o službi.', $session->summary);
+        $this->assertNull($session->topics);
+        $this->assertSame("- Validacija\n- Delo z ego stanji", $session->interventions);
+        $this->assertSame('- Utrujenost', $session->warnings);
+        $this->assertSame('- Raziskati odnos s šefom', $session->next_ideas);
+        $this->assertSame([
+            'interventions' => [
+                ['title' => 'Validacija', 'explanation' => 'Potrditev občutkov klienta.', 'example' => 'Slišim, da te je to prizadelo.'],
+                ['title' => 'Delo z ego stanji', 'explanation' => 'Raziskava notranjih glasov.', 'example' => 'Kateri del tebe govori zdaj?'],
+            ],
+            'warnings' => [
+                ['title' => 'Utrujenost', 'explanation' => 'Tempo je bil prehiter.', 'example' => 'Naslednjič preveri spanje.'],
+            ],
+            'next_ideas' => [
+                ['title' => 'Raziskati odnos s šefom', 'explanation' => 'Odnos ostaja odprt.', 'example' => 'Vprašaj, kaj bi šefu povedal.'],
+            ],
+        ], $session->insight_details);
+        Http::assertSent(function (Request $request): bool {
+            $prompt = (string) data_get($request->data(), 'contents.0.parts.0.text');
+            $required = data_get($request->data(), 'generationConfig.responseSchema.required');
+
+            return ! str_contains($prompt, 'topics')
+                && ! str_contains($prompt, 'ključnih tem')
+                && str_contains($prompt, 'explanation')
+                && str_contains($prompt, 'example')
+                && $required === ['summary', 'interventions', 'warnings', 'next_ideas', 'other_approaches'];
+        });
+    }
+
+    public function test_plain_string_lists_store_bullets_without_explanations(): void
+    {
+        config(['therapy.gemini.api_key' => 'test-key']);
+        Http::preventStrayRequests();
+        Http::fake([
+            self::GEMINI_URL => Http::response($this->geminiText(json_encode([
+                'summary' => 'Povzetek',
+                'interventions' => ['Validacija'],
+                'warnings' => [],
+                'next_ideas' => [],
             ]))),
         ]);
         $session = TherapySession::factory()->processing()->create();
@@ -35,12 +90,10 @@ class ProcessTherapySessionTest extends TestCase
         (new ProcessTherapySession($session->id))->handle(app(GeminiService::class));
 
         $session->refresh();
-        $this->assertSame('ready', $session->status);
-        $this->assertSame('Klient je govoril o službi.', $session->summary);
-        $this->assertSame(['služba', 'meje'], $session->topics);
-        $this->assertSame("- Validacija\n- Delo z ego stanji", $session->interventions);
-        $this->assertSame('- Utrujenost', $session->warnings);
-        $this->assertSame('- Raziskati odnos s šefom', $session->next_ideas);
+        $this->assertSame('- Validacija', $session->interventions);
+        $this->assertSame([
+            ['title' => 'Validacija', 'explanation' => '', 'example' => ''],
+        ], $session->insight_details['interventions']);
     }
 
     public function test_stores_one_recommendation_per_other_therapy_approach(): void
@@ -49,7 +102,7 @@ class ProcessTherapySessionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([
             self::GEMINI_URL => Http::response($this->geminiText(json_encode([
-                'summary' => 'Povzetek', 'topics' => [], 'interventions' => [], 'warnings' => [], 'next_ideas' => [],
+                'summary' => 'Povzetek', 'interventions' => [], 'warnings' => [], 'next_ideas' => [],
                 'other_approaches' => [
                     ['approach' => 'Geštalt terapija', 'recommendation' => 'Delo s praznim stolom.'],
                     ['approach' => 'Telesna terapija', 'recommendation' => 'Opazovanje dihanja.'],
@@ -80,7 +133,7 @@ class ProcessTherapySessionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([
             self::GEMINI_URL => Http::response($this->geminiText(json_encode([
-                'summary' => 'Povzetek', 'topics' => [], 'interventions' => [], 'warnings' => [], 'next_ideas' => [],
+                'summary' => 'Povzetek', 'interventions' => [], 'warnings' => [], 'next_ideas' => [],
             ]))),
         ]);
         $session = TherapySession::factory()->processing()->create();

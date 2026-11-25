@@ -27,6 +27,7 @@ class TherapySession extends Model
         'interventions',
         'warnings',
         'next_ideas',
+        'insight_details',
         'other_approaches',
         'status',
         'error_message',
@@ -37,6 +38,7 @@ class TherapySession extends Model
         return [
             'session_date' => 'date',
             'topics' => 'array',
+            'insight_details' => 'array',
         ];
     }
 
@@ -105,6 +107,85 @@ class TherapySession extends Model
         }
 
         return $items;
+    }
+
+    /**
+     * Alineje z daljšo razlago in primerom. Stari zapiski imajo samo besedilo alineje.
+     *
+     * @return list<array{title: string, explanation: string, example: string}>
+     */
+    public function insights(string $field): array
+    {
+        $stored = $this->insight_details[$field] ?? null;
+
+        if (is_array($stored) && $stored !== []) {
+            return self::normalizeInsights($stored);
+        }
+
+        return array_map(
+            fn (string $title): array => ['title' => $title, 'explanation' => '', 'example' => ''],
+            self::bulletItems(is_string($this->{$field}) ? $this->{$field} : null),
+        );
+    }
+
+    /**
+     * @param  list<mixed>  $items
+     * @return list<array{title: string, explanation: string, example: string}>
+     */
+    public static function normalizeInsights(array $items): array
+    {
+        $normalized = [];
+
+        foreach ($items as $item) {
+            if (is_string($item)) {
+                $title = trim($item);
+                $explanation = '';
+                $example = '';
+            } elseif (is_array($item)) {
+                $title = self::insightText($item['title'] ?? null);
+                $explanation = self::insightText($item['explanation'] ?? null);
+                $example = self::insightText($item['example'] ?? null);
+            } else {
+                continue;
+            }
+
+            if ($title === '') {
+                continue;
+            }
+
+            $normalized[] = [
+                'title' => $title,
+                'explanation' => $explanation,
+                'example' => $example,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Ob urejanju besedila ohrani razlago in primer, če naslov alineje ostane enak.
+     *
+     * @param  list<mixed>  $existing
+     * @return list<array{title: string, explanation: string, example: string}>
+     */
+    public static function alignInsights(?string $text, array $existing): array
+    {
+        $byTitle = [];
+
+        foreach (self::normalizeInsights($existing) as $item) {
+            $byTitle[$item['title']] ??= $item;
+        }
+
+        return array_map(
+            fn (string $title): array => $byTitle[$title] ?? ['title' => $title, 'explanation' => '', 'example' => ''],
+            self::bulletItems($text),
+        );
+    }
+
+    protected static function insightText(mixed $value): string
+    {
+        return is_scalar($value) ? trim((string) $value) : '';
     }
 
     public function deleteAudio(): void
